@@ -1,8 +1,21 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"log"
+	"os"
+)
+
+
 
 func main(){
-	fmt.Println("Hello, World!")
+	filePath := "./test.txt"
+	fileBuffer,err := os.ReadFile(filePath)
+	
+	if err!=nil{
+		log.Fatal(err)	
+	}
+		
+	fmt.Println(string(fileBuffer))
 }
 
