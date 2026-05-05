@@ -1,21 +1,24 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"os"
+	"net/http"
 )
 
+type Config struct {
+  Addr string
+}
 
+type Proxy struct {
+	config Config
+	server *http.Server
+	client *http.Client
+	transport *http.Transport
+	// true for running, false for stopped
+	State bool
+}
 
 func main(){
-	filePath := "./test.txt"
-	fileBuffer,err := os.ReadFile(filePath)
-	
-	if err!=nil{
-		log.Fatal(err)	
-	}
-		
-	fmt.Println(string(fileBuffer))
+	log.Println("Starting proxy server...")
 }
 
