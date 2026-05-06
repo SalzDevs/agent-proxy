@@ -37,13 +37,28 @@ func NewProxy(config Config) (*Proxy,error) {
 	return proxy, nil
 }
 
+func ServeHTTP(w http.ResponseWriter, r *http.Request) { 
+	fmt.Println("Received request: ", r.Method)
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Hello from the proxy!"))
+}
+
+
+func (p *Proxy) StartProxy() error {
+	p.server.Handler = http.HandlerFunc(ServeHTTP)
+	p.State = true
+	log.Printf("Starting proxy server on %s", p.config.Addr)
+	return p.server.ListenAndServe()
+}
+
 func main(){
 	config := Config{Addr: "127.0.0.1:8080"}
 	proxy, err := NewProxy(config)
 	if err != nil {
 		log.Fatalf("Failed to create proxy: %v", err)
 	}
-
-	log.Printf("Proxy data: %+v", proxy)
+	if err := proxy.StartProxy(); err != nil {	
+		log.Fatalf("Failed to start proxy: %v", err)
+	}
 }
 
