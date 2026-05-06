@@ -35,6 +35,20 @@ func TestNewProxy_RejectsEmptyAddr(t *testing.T) {
 	}
 }
 
+func TestNewProxy_RejectsInvalidAddr(t *testing.T) {
+	cases := []Config{
+		{Addr: "127.0.0.1"},
+		{Addr: "127.0.0.1:99999"},
+		{Addr: "127.0.0.1:abc"},
+	}
+
+	for _, tc := range cases {
+		if _, err := NewProxy(tc); err == nil {
+			t.Fatalf("expected error for addr %q, got nil", tc.Addr)
+		}
+	}
+}
+
 func TestNewProxy_InitializesInternalFields(t *testing.T) {
 	cfg := Config{Addr: "127.0.0.1:8080"}
 
