@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 )
@@ -37,10 +38,60 @@ func NewProxy(config Config) (*Proxy,error) {
 	return proxy, nil
 }
 
+func removeHopByHopHeaders(h http.Header){
+	headers := []string{
+		"Connection",
+		"Proxy-Connection",
+		"Keep-Alive",
+		"Proxy-Authenticate",
+		"Proxy-Authorization",
+		"Te",
+		"Trailer",
+		"Transfer-Encoding",
+		"Upgrade",
+	}
+
+	for _,header := range headers {
+		h.Del(header)
+	}
+}
+
 func (p* Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Received request: %s", r.Method)
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Hello from the proxy!"))
+	log.Printf("Received request: %s %s", r.Method, r.URL.String())
+
+	if r.URL == nil || r.URL.Scheme == "" || r.URL.Host == "" {
+		http.Error(w, "proxy request must contain an absolute URL", http.StatusBadRequest)
+		return 
+	}
+
+	outReq, err := http.NewRequestWithContext(r.Context(), r.Method,r.URL.String(), r.Body)
+	if err!=nil {
+		http.Error(w,"failed to reach upstream request", http.StatusInternalServerError)
+		return
+	}
+
+	outReq.Header = r.Header.Clone()
+	removeHopByHopHeaders(outReq.Header)
+	outReq.Host = r.URL.Host
+
+	resp,err := p.client.Do(outReq)
+	if err!=nil {
+		http.Error(w,"failed to reach upstream server",http.StatusBadGateway)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	removeHopByHopHeaders(resp.Header)
+
+	for k, values := range resp.Header {
+		for _,v := range values {
+			w.Header().Add(k,v)
+		}
+	}
+
+	w.WriteHeader(resp.StatusCode)
+	_,_ = io.Copy(w,resp.Body)
 }
 
 
