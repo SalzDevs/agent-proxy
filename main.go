@@ -37,16 +37,18 @@ func NewProxy(config Config) (*Proxy,error) {
 	return proxy, nil
 }
 
-func ServeHTTP(w http.ResponseWriter, r *http.Request) { 
-	fmt.Println("Received request: ", r.Method)
+func (p* Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received request: %s", r.Method)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Hello from the proxy!"))
 }
 
 
 func (p *Proxy) StartProxy() error {
-	p.server.Handler = http.HandlerFunc(ServeHTTP)
+  p.server.Handler = p
 	p.State = true
+	defer func() { p.State = false}()
+
 	log.Printf("Starting proxy server on %s", p.config.Addr)
 	return p.server.ListenAndServe()
 }
@@ -57,6 +59,7 @@ func main(){
 	if err != nil {
 		log.Fatalf("Failed to create proxy: %v", err)
 	}
+
 	if err := proxy.StartProxy(); err != nil {	
 		log.Fatalf("Failed to start proxy: %v", err)
 	}
