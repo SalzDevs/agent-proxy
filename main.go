@@ -62,8 +62,16 @@ func validateAddr(addr string) error {
 	return nil
 }
 
-func NewProxy(config Config) (*Proxy,error) {
+func validateConfig(config Config) error {
 	if err := validateAddr(config.Addr); err != nil {
+		return fmt.Errorf("invalid config: %w", err)
+	}
+
+	return nil
+}
+
+func NewProxy(config Config) (*Proxy,error) {
+	if err := validateConfig(config); err != nil {
 		return nil, err
 	}
 
