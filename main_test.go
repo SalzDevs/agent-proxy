@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 type capturedRequest struct {
@@ -27,6 +31,45 @@ func newTestProxy(t *testing.T) *Proxy {
 	}
 
 	return p
+}
+
+func newTestProxyAtAddr(t *testing.T, addr string) *Proxy {
+	t.Helper()
+
+	p, err := NewProxy(Config{Addr: addr})
+	if err != nil {
+		t.Fatalf("NewProxy() error = %v", err)
+	}
+
+	return p
+}
+
+func freeAddr(t *testing.T) string {
+	t.Helper()
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen() error = %v", err)
+	}
+	defer l.Close()
+
+	return l.Addr().String()
+}
+
+func waitForTCP(t *testing.T, addr string) {
+	t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("tcp", addr, 50*time.Millisecond)
+		if err == nil {
+			_ = conn.Close()
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	t.Fatalf("timed out waiting for %s to accept connections", addr)
 }
 
 func TestNewProxy_RejectsEmptyAddr(t *testing.T) {
@@ -80,6 +123,75 @@ func TestNewProxy_InitializesInternalFields(t *testing.T) {
 	}
 	if p.State {
 		t.Fatal("expected proxy to start stopped")
+	}
+}
+
+func TestStopProxy_ReturnsErrorWhenNotRunning(t *testing.T) {
+	p := newTestProxy(t)
+
+	if err := p.StopProxy(context.Background()); err == nil {
+		t.Fatal("expected error when stopping a non-running proxy, got nil")
+	}
+}
+
+func TestStartProxyAndStopProxy_Lifecycle(t *testing.T) {
+	addr := freeAddr(t)
+	p := newTestProxyAtAddr(t, addr)
+
+	upstreamBody := "upstream alive"
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(upstreamBody))
+	}))
+	defer upstream.Close()
+
+	startErrCh := make(chan error, 1)
+	go func() {
+		startErrCh <- p.StartProxy()
+	}()
+
+	waitForTCP(t, addr)
+	if !p.State {
+		t.Fatal("expected proxy state to be true while running")
+	}
+
+	proxyURL, err := url.Parse("http://" + addr)
+	if err != nil {
+		t.Fatalf("url.Parse() error = %v", err)
+	}
+
+	client := &http.Client{
+		Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL)},
+	}
+
+	resp, err := client.Get(upstream.URL)
+	if err != nil {
+		t.Fatalf("client.Get() error = %v", err)
+	}
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		t.Fatalf("io.ReadAll() error = %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("response status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if string(body) != upstreamBody {
+		t.Fatalf("response body = %q, want %q", string(body), upstreamBody)
+	}
+
+	stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := p.StopProxy(stopCtx); err != nil {
+		t.Fatalf("StopProxy() error = %v", err)
+	}
+
+	if err := <-startErrCh; err != nil {
+		t.Fatalf("StartProxy() returned error = %v", err)
+	}
+	if p.State {
+		t.Fatal("expected proxy state to be false after shutdown")
 	}
 }
 
