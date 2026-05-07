@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -144,14 +146,27 @@ func (p* Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_,_ = io.Copy(w,resp.Body)
 }
 
+func (p *Proxy) StopProxy(ctx context.Context) error {
+	if !p.State {
+		return fmt.Errorf("proxy is not running")
+	}
+
+	defer func() { p.State = false }()
+	log.Printf("Stopping proxy server on %s", p.config.Addr)
+	return p.server.Shutdown(ctx)
+}
 
 func (p *Proxy) StartProxy() error {
-  p.server.Handler = p
+	p.server.Handler = p
 	p.State = true
-	defer func() { p.State = false}()
+	defer func() { p.State = false }()
 
 	log.Printf("Starting proxy server on %s", p.config.Addr)
-	return p.server.ListenAndServe()
+	if err := p.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+
+	return nil
 }
 
 func main(){
@@ -165,4 +180,5 @@ func main(){
 		log.Fatalf("Failed to start proxy: %v", err)
 	}
 }
+
 
