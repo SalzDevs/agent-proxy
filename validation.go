@@ -12,6 +12,12 @@ func validateConfig(config Config) error {
 		return fmt.Errorf("invalid config: %w", err)
 	}
 
+	if config.Timeouts != nil {
+		if err := validateTimeouts(*config.Timeouts); err != nil {
+			return fmt.Errorf("invalid config: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -49,6 +55,29 @@ func validatePort(port string) error {
 
 	if portInt < 1 || portInt > 65535 {
 		return fmt.Errorf("port must be between 1 and 65535")
+	}
+
+	return nil
+}
+
+func validateTimeouts(timeouts Timeouts) error {
+	if timeouts.Dial < 0 {
+		return fmt.Errorf("dial timeout cannot be negative")
+	}
+	if timeouts.TLSHandshake < 0 {
+		return fmt.Errorf("TLS handshake timeout cannot be negative")
+	}
+	if timeouts.ResponseHeader < 0 {
+		return fmt.Errorf("response header timeout cannot be negative")
+	}
+	if timeouts.IdleConn < 0 {
+		return fmt.Errorf("idle connection timeout cannot be negative")
+	}
+	if timeouts.ReadHeader < 0 {
+		return fmt.Errorf("read header timeout cannot be negative")
+	}
+	if timeouts.Idle < 0 {
+		return fmt.Errorf("idle timeout cannot be negative")
 	}
 
 	return nil

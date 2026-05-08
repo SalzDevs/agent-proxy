@@ -93,6 +93,38 @@ func TestNew_RejectsInvalidAddr(t *testing.T) {
 	}
 }
 
+func TestDefaultTimeouts_AppliesMissingValues(t *testing.T) {
+	customDial := 2 * time.Second
+
+	p, err := New(Config{
+		Addr: "127.0.0.1:8080",
+		Timeouts: &Timeouts{
+			Dial: customDial,
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	want := DefaultTimeouts()
+	want.Dial = customDial
+
+	if *p.config.Timeouts != want {
+		t.Fatalf("proxy timeouts = %+v, want %+v", *p.config.Timeouts, want)
+	}
+}
+
+func TestNew_RejectsNegativeTimeout(t *testing.T) {
+	if _, err := New(Config{
+		Addr: "127.0.0.1:8080",
+		Timeouts: &Timeouts{
+			Dial: -1 * time.Second,
+		},
+	}); err == nil {
+		t.Fatal("expected error for negative timeout, got nil")
+	}
+}
+
 func TestNew_InitializesInternalFields(t *testing.T) {
 	cfg := Config{Addr: "127.0.0.1:8080"}
 
@@ -104,8 +136,14 @@ func TestNew_InitializesInternalFields(t *testing.T) {
 	if p == nil {
 		t.Fatal("expected proxy, got nil")
 	}
-	if p.config != cfg {
-		t.Fatalf("proxy config = %+v, want %+v", p.config, cfg)
+	if p.config.Addr != cfg.Addr {
+		t.Fatalf("proxy config addr = %q, want %q", p.config.Addr, cfg.Addr)
+	}
+	if p.config.Timeouts == nil {
+		t.Fatal("expected proxy timeouts to be resolved")
+	}
+	if *p.config.Timeouts != DefaultTimeouts() {
+		t.Fatalf("proxy timeouts = %+v, want %+v", *p.config.Timeouts, DefaultTimeouts())
 	}
 	if p.server == nil {
 		t.Fatal("expected server to be initialized")

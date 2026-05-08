@@ -14,12 +14,12 @@ import (
 // A Proxy can be started as a standalone server with Start, gracefully stopped
 // with Shutdown, or used directly as an http.Handler through ServeHTTP.
 type Proxy struct {
-	config     Config
+	config    Config
 	server    *http.Server
 	client    *http.Client
 	transport *http.Transport
-	running    bool
-	mu 				 sync.RWMutex
+	running   bool
+	mu        sync.RWMutex
 }
 
 // New creates a Proxy from config.
@@ -27,6 +27,8 @@ type Proxy struct {
 // New validates the config and prepares the internal server/client state, but it
 // does not start listening. Call Start to begin accepting proxy requests.
 func New(config Config) (*Proxy, error) {
+	config = resolveConfig(config)
+
 	if err := validateConfig(config); err != nil {
 		return nil, err
 	}
@@ -44,22 +46,22 @@ func New(config Config) (*Proxy, error) {
 	return proxy, nil
 }
 
-// Addr returns the configured TCP address the proxy listens on
+// Addr returns the configured TCP address the proxy listens on.
 func (p *Proxy) Addr() string {
 	return p.config.Addr
 }
 
 // IsRunning reports whether the proxy server is currently running.
 func (p *Proxy) IsRunning() bool {
-	p.mu.RLock()	
+	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.running
 }
 
-func (p *Proxy) setRunning(flag bool){
+func (p *Proxy) setRunning(flag bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.running = flag 
+	p.running = flag
 }
 
 // Start starts the proxy server and blocks until the server stops.
@@ -68,8 +70,8 @@ func (p *Proxy) setRunning(flag bool){
 // error if the server fails to start or stops unexpectedly.
 func (p *Proxy) Start() error {
 	p.server.Handler = p
-	p.setRunning(true)	
-	defer p.setRunning(false) 
+	p.setRunning(true)
+	defer p.setRunning(false)
 
 	log.Printf("Starting proxy server on %s", p.config.Addr)
 	if err := p.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -87,7 +89,7 @@ func (p *Proxy) Shutdown(ctx context.Context) error {
 	if !p.IsRunning() {
 		return fmt.Errorf("proxy is not running")
 	}
-	
+
 	defer p.setRunning(false)
 	log.Printf("Stopping proxy server on %s", p.config.Addr)
 	return p.server.Shutdown(ctx)
