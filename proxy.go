@@ -27,7 +27,8 @@ type Proxy struct {
 // New validates the config and prepares the internal server/client state, but it
 // does not start listening. Call Start to begin accepting proxy requests.
 func New(config Config) (*Proxy, error) {
-	config = resolveConfig(config)
+	timeouts := resolveTimeouts(config.Timeouts)
+	config.Timeouts = &timeouts
 
 	if err := validateConfig(config); err != nil {
 		return nil, err

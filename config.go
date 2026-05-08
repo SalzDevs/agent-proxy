@@ -56,12 +56,6 @@ func DefaultTimeouts() Timeouts {
 	}
 }
 
-func resolveConfig(config Config) Config {
-	timeouts := resolveTimeouts(config.Timeouts)
-	config.Timeouts = &timeouts
-	return config
-}
-
 func resolveTimeouts(custom *Timeouts) Timeouts {
 	defaults := DefaultTimeouts()
 	if custom == nil {
