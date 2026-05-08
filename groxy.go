@@ -1,4 +1,4 @@
-package main
+package groxy
 
 import (
 	"context"
@@ -226,16 +226,4 @@ func (p *Proxy) Start() error {
 	}
 
 	return nil
-}
-
-func main() {
-	config := Config{Addr: "127.0.0.1:8080"}
-	proxy, err := New(config)
-	if err != nil {
-		log.Fatalf("Failed to create proxy: %v", err)
-	}
-
-	if err := proxy.Start(); err != nil {
-		log.Fatalf("Failed to start proxy: %v", err)
-	}
 }
