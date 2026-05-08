@@ -22,7 +22,11 @@ type Proxy struct {
 	client    *http.Client
 	transport *http.Transport
 	// true for running, false for stopped
-	State bool
+	running bool
+}
+
+func (p *Proxy) IsRunning() bool {
+	return p.running
 }
 
 func parseAddr(addr string) (string, string, error) {
@@ -72,7 +76,7 @@ func validateConfig(config Config) error {
 	return nil
 }
 
-func NewProxy(config Config) (*Proxy, error) {
+func New(config Config) (*Proxy, error) {
 	if err := validateConfig(config); err != nil {
 		return nil, err
 	}
@@ -84,7 +88,7 @@ func NewProxy(config Config) (*Proxy, error) {
 		server:    &http.Server{Addr: config.Addr},
 		client:    &http.Client{Transport: transport},
 		transport: transport,
-		State:     false,
+		running:   false,
 	}
 
 	return proxy, nil
@@ -112,14 +116,14 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received request: %s %s", r.Method, r.URL.String())
 
 	if r.Method == http.MethodConnect {
-		p.handleConnect(w, r)
+		p.handleCONNECT(w, r)
 		return
 	}
 
-	p.handleHTTP(w, r)
+	p.handleForwardHTTP(w, r)
 }
 
-func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
+func (p *Proxy) handleForwardHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL == nil || r.URL.Scheme == "" || r.URL.Host == "" {
 		http.Error(w, "proxy request must contain an absolute URL", http.StatusBadRequest)
 		return
@@ -154,7 +158,7 @@ func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.Copy(w, resp.Body)
 }
 
-func (p *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
+func (p *Proxy) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 	target := r.Host
 	if target == "" {
 		http.Error(w, "CONNECT request missing target host", http.StatusBadRequest)
@@ -201,20 +205,20 @@ func (p *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	<-done
 }
 
-func (p *Proxy) StopProxy(ctx context.Context) error {
-	if !p.State {
+func (p *Proxy) Shutdown(ctx context.Context) error {
+	if !p.IsRunning() {
 		return fmt.Errorf("proxy is not running")
 	}
 
-	defer func() { p.State = false }()
+	defer func() { p.running = false }()
 	log.Printf("Stopping proxy server on %s", p.config.Addr)
 	return p.server.Shutdown(ctx)
 }
 
-func (p *Proxy) StartProxy() error {
+func (p *Proxy) Start() error {
 	p.server.Handler = p
-	p.State = true
-	defer func() { p.State = false }()
+	p.running = true
+	defer func() { p.running = false }()
 
 	log.Printf("Starting proxy server on %s", p.config.Addr)
 	if err := p.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -226,12 +230,12 @@ func (p *Proxy) StartProxy() error {
 
 func main() {
 	config := Config{Addr: "127.0.0.1:8080"}
-	proxy, err := NewProxy(config)
+	proxy, err := New(config)
 	if err != nil {
 		log.Fatalf("Failed to create proxy: %v", err)
 	}
 
-	if err := proxy.StartProxy(); err != nil {
+	if err := proxy.Start(); err != nil {
 		log.Fatalf("Failed to start proxy: %v", err)
 	}
 }

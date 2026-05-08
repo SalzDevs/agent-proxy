@@ -26,9 +26,9 @@ type capturedRequest struct {
 func newTestProxy(t *testing.T) *Proxy {
 	t.Helper()
 
-	p, err := NewProxy(Config{Addr: "127.0.0.1:8080"})
+	p, err := New(Config{Addr: "127.0.0.1:8080"})
 	if err != nil {
-		t.Fatalf("NewProxy() error = %v", err)
+		t.Fatalf("New() error = %v", err)
 	}
 
 	return p
@@ -37,9 +37,9 @@ func newTestProxy(t *testing.T) *Proxy {
 func newTestProxyAtAddr(t *testing.T, addr string) *Proxy {
 	t.Helper()
 
-	p, err := NewProxy(Config{Addr: addr})
+	p, err := New(Config{Addr: addr})
 	if err != nil {
-		t.Fatalf("NewProxy() error = %v", err)
+		t.Fatalf("New() error = %v", err)
 	}
 
 	return p
@@ -74,7 +74,7 @@ func waitForTCP(t *testing.T, addr string) {
 }
 
 func TestNewProxy_RejectsEmptyAddr(t *testing.T) {
-	if _, err := NewProxy(Config{}); err == nil {
+	if _, err := New(Config{}); err == nil {
 		t.Fatal("expected error for empty address, got nil")
 	}
 }
@@ -87,7 +87,7 @@ func TestNewProxy_RejectsInvalidAddr(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		if _, err := NewProxy(tc); err == nil {
+		if _, err := New(tc); err == nil {
 			t.Fatalf("expected error for addr %q, got nil", tc.Addr)
 		}
 	}
@@ -96,9 +96,9 @@ func TestNewProxy_RejectsInvalidAddr(t *testing.T) {
 func TestNewProxy_InitializesInternalFields(t *testing.T) {
 	cfg := Config{Addr: "127.0.0.1:8080"}
 
-	p, err := NewProxy(cfg)
+	p, err := New(cfg)
 	if err != nil {
-		t.Fatalf("NewProxy() error = %v", err)
+		t.Fatalf("New() error = %v", err)
 	}
 
 	if p == nil {
@@ -122,7 +122,7 @@ func TestNewProxy_InitializesInternalFields(t *testing.T) {
 	if p.client.Transport != p.transport {
 		t.Fatalf("client transport = %#v, want %#v", p.client.Transport, p.transport)
 	}
-	if p.State {
+	if p.IsRunning() {
 		t.Fatal("expected proxy to start stopped")
 	}
 }
@@ -130,7 +130,7 @@ func TestNewProxy_InitializesInternalFields(t *testing.T) {
 func TestStopProxy_ReturnsErrorWhenNotRunning(t *testing.T) {
 	p := newTestProxy(t)
 
-	if err := p.StopProxy(context.Background()); err == nil {
+	if err := p.Shutdown(context.Background()); err == nil {
 		t.Fatal("expected error when stopping a non-running proxy, got nil")
 	}
 }
@@ -148,11 +148,11 @@ func TestStartProxyAndStopProxy_Lifecycle(t *testing.T) {
 
 	startErrCh := make(chan error, 1)
 	go func() {
-		startErrCh <- p.StartProxy()
+		startErrCh <- p.Start()
 	}()
 
 	waitForTCP(t, addr)
-	if !p.State {
+	if !p.IsRunning() {
 		t.Fatal("expected proxy state to be true while running")
 	}
 
@@ -184,14 +184,14 @@ func TestStartProxyAndStopProxy_Lifecycle(t *testing.T) {
 
 	stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := p.StopProxy(stopCtx); err != nil {
-		t.Fatalf("StopProxy() error = %v", err)
+	if err := p.Shutdown(stopCtx); err != nil {
+		t.Fatalf("Shutdown() error = %v", err)
 	}
 
 	if err := <-startErrCh; err != nil {
-		t.Fatalf("StartProxy() returned error = %v", err)
+		t.Fatalf("Start() returned error = %v", err)
 	}
-	if p.State {
+	if p.IsRunning() {
 		t.Fatal("expected proxy state to be false after shutdown")
 	}
 }
@@ -244,7 +244,7 @@ func TestHandleConnect_TunnelsTCPData(t *testing.T) {
 
 	startErrCh := make(chan error, 1)
 	go func() {
-		startErrCh <- p.StartProxy()
+		startErrCh <- p.Start()
 	}()
 
 	waitForTCP(t, proxyAddr)
@@ -300,11 +300,11 @@ func TestHandleConnect_TunnelsTCPData(t *testing.T) {
 
 	stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := p.StopProxy(stopCtx); err != nil {
-		t.Fatalf("StopProxy() error = %v", err)
+	if err := p.Shutdown(stopCtx); err != nil {
+		t.Fatalf("Shutdown() error = %v", err)
 	}
 	if err := <-startErrCh; err != nil {
-		t.Fatalf("StartProxy() returned error = %v", err)
+		t.Fatalf("Start() returned error = %v", err)
 	}
 }
 
