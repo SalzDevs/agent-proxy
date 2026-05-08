@@ -9,6 +9,9 @@ import (
 )
 
 // Proxy represents a forward proxy server.
+//
+// A Proxy can be started as a standalone server with Start, gracefully stopped
+// with Shutdown, or used directly as an http.Handler through ServeHTTP.
 type Proxy struct {
 	config    Config
 	server    *http.Server
@@ -17,7 +20,10 @@ type Proxy struct {
 	running   bool
 }
 
-// New creates a proxy from the given config.
+// New creates a Proxy from config.
+//
+// New validates the config and prepares the internal server/client state, but it
+// does not start listening. Call Start to begin accepting proxy requests.
 func New(config Config) (*Proxy, error) {
 	if err := validateConfig(config); err != nil {
 		return nil, err
@@ -41,7 +47,10 @@ func (p *Proxy) IsRunning() bool {
 	return p.running
 }
 
-// Start starts the proxy server and blocks until it stops.
+// Start starts the proxy server and blocks until the server stops.
+//
+// Start returns nil when the server is stopped through Shutdown. It returns an
+// error if the server fails to start or stops unexpectedly.
 func (p *Proxy) Start() error {
 	p.server.Handler = p
 	p.running = true
@@ -56,6 +65,9 @@ func (p *Proxy) Start() error {
 }
 
 // Shutdown gracefully stops the proxy server.
+//
+// Shutdown stops accepting new requests and waits for active requests to finish
+// until ctx is canceled or expires.
 func (p *Proxy) Shutdown(ctx context.Context) error {
 	if !p.IsRunning() {
 		return fmt.Errorf("proxy is not running")
