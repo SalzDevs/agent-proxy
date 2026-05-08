@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 )
 
 // Proxy represents a forward proxy server.
@@ -13,11 +14,12 @@ import (
 // A Proxy can be started as a standalone server with Start, gracefully stopped
 // with Shutdown, or used directly as an http.Handler through ServeHTTP.
 type Proxy struct {
-	config    Config
+	config     Config
 	server    *http.Server
 	client    *http.Client
 	transport *http.Transport
-	running   bool
+	running    bool
+	mu 				 sync.RWMutex
 }
 
 // New creates a Proxy from config.
@@ -49,7 +51,15 @@ func (p *Proxy) Addr() string {
 
 // IsRunning reports whether the proxy server is currently running.
 func (p *Proxy) IsRunning() bool {
+	p.mu.RLock()	
+	defer p.mu.RUnlock()
 	return p.running
+}
+
+func (p *Proxy) setRunning(flag bool){
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.running = flag 
 }
 
 // Start starts the proxy server and blocks until the server stops.
@@ -58,8 +68,8 @@ func (p *Proxy) IsRunning() bool {
 // error if the server fails to start or stops unexpectedly.
 func (p *Proxy) Start() error {
 	p.server.Handler = p
-	p.running = true
-	defer func() { p.running = false }()
+	p.setRunning(true)	
+	defer p.setRunning(false) 
 
 	log.Printf("Starting proxy server on %s", p.config.Addr)
 	if err := p.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -77,8 +87,8 @@ func (p *Proxy) Shutdown(ctx context.Context) error {
 	if !p.IsRunning() {
 		return fmt.Errorf("proxy is not running")
 	}
-
-	defer func() { p.running = false }()
+	
+	defer p.setRunning(false)
 	log.Printf("Stopping proxy server on %s", p.config.Addr)
 	return p.server.Shutdown(ctx)
 }
