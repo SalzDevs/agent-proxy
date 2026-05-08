@@ -13,13 +13,13 @@ import (
 )
 
 type Config struct {
-  Addr string
+	Addr string
 }
 
 type Proxy struct {
-	config Config
-	server *http.Server
-	client *http.Client
+	config    Config
+	server    *http.Server
+	client    *http.Client
 	transport *http.Transport
 	// true for running, false for stopped
 	State bool
@@ -72,7 +72,7 @@ func validateConfig(config Config) error {
 	return nil
 }
 
-func NewProxy(config Config) (*Proxy,error) {
+func NewProxy(config Config) (*Proxy, error) {
 	if err := validateConfig(config); err != nil {
 		return nil, err
 	}
@@ -80,17 +80,17 @@ func NewProxy(config Config) (*Proxy,error) {
 	transport := &http.Transport{}
 
 	proxy := &Proxy{
-		config: config,
-		server: &http.Server{Addr: config.Addr},
-		client: &http.Client{Transport: transport},
+		config:    config,
+		server:    &http.Server{Addr: config.Addr},
+		client:    &http.Client{Transport: transport},
 		transport: transport,
-		State: false,
+		State:     false,
 	}
 
 	return proxy, nil
 }
 
-func removeHopByHopHeaders(h http.Header){
+func removeHopByHopHeaders(h http.Header) {
 	headers := []string{
 		"Connection",
 		"Proxy-Connection",
@@ -103,22 +103,31 @@ func removeHopByHopHeaders(h http.Header){
 		"Upgrade",
 	}
 
-	for _,header := range headers {
+	for _, header := range headers {
 		h.Del(header)
 	}
 }
 
-func (p* Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received request: %s %s", r.Method, r.URL.String())
 
-	if r.URL == nil || r.URL.Scheme == "" || r.URL.Host == "" {
-		http.Error(w, "proxy request must contain an absolute URL", http.StatusBadRequest)
-		return 
+	if r.Method == http.MethodConnect {
+		http.Error(w, "CONNECT is not supported yet", http.StatusNotImplemented)
+		return
 	}
 
-	outReq, err := http.NewRequestWithContext(r.Context(), r.Method,r.URL.String(), r.Body)
-	if err!=nil {
-		http.Error(w,"failed to reach upstream request", http.StatusInternalServerError)
+	p.handleHTTP(w, r)
+}
+
+func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL == nil || r.URL.Scheme == "" || r.URL.Host == "" {
+		http.Error(w, "proxy request must contain an absolute URL", http.StatusBadRequest)
+		return
+	}
+
+	outReq, err := http.NewRequestWithContext(r.Context(), r.Method, r.URL.String(), r.Body)
+	if err != nil {
+		http.Error(w, "failed to reach upstream request", http.StatusInternalServerError)
 		return
 	}
 
@@ -126,24 +135,23 @@ func (p* Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	removeHopByHopHeaders(outReq.Header)
 	outReq.Host = r.URL.Host
 
-	resp,err := p.client.Do(outReq)
-	if err!=nil {
-		http.Error(w,"failed to reach upstream server",http.StatusBadGateway)
+	resp, err := p.client.Do(outReq)
+	if err != nil {
+		http.Error(w, "failed to reach upstream server", http.StatusBadGateway)
 		return
 	}
-
 	defer resp.Body.Close()
 
 	removeHopByHopHeaders(resp.Header)
 
 	for k, values := range resp.Header {
-		for _,v := range values {
-			w.Header().Add(k,v)
+		for _, v := range values {
+			w.Header().Add(k, v)
 		}
 	}
 
 	w.WriteHeader(resp.StatusCode)
-	_,_ = io.Copy(w,resp.Body)
+	_, _ = io.Copy(w, resp.Body)
 }
 
 func (p *Proxy) StopProxy(ctx context.Context) error {
@@ -169,16 +177,14 @@ func (p *Proxy) StartProxy() error {
 	return nil
 }
 
-func main(){
+func main() {
 	config := Config{Addr: "127.0.0.1:8080"}
 	proxy, err := NewProxy(config)
 	if err != nil {
 		log.Fatalf("Failed to create proxy: %v", err)
 	}
 
-	if err := proxy.StartProxy(); err != nil {	
+	if err := proxy.StartProxy(); err != nil {
 		log.Fatalf("Failed to start proxy: %v", err)
 	}
 }
-
-
