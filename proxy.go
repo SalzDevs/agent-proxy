@@ -42,6 +42,11 @@ func New(config Config) (*Proxy, error) {
 	return proxy, nil
 }
 
+// Addr returns the configured TCP address the proxy listens on
+func (p *Proxy) Addr() string {
+	return p.config.Addr
+}
+
 // IsRunning reports whether the proxy server is currently running.
 func (p *Proxy) IsRunning() bool {
 	return p.running
