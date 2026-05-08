@@ -73,13 +73,13 @@ func waitForTCP(t *testing.T, addr string) {
 	t.Fatalf("timed out waiting for %s to accept connections", addr)
 }
 
-func TestNewProxy_RejectsEmptyAddr(t *testing.T) {
+func TestNew_RejectsEmptyAddr(t *testing.T) {
 	if _, err := New(Config{}); err == nil {
 		t.Fatal("expected error for empty address, got nil")
 	}
 }
 
-func TestNewProxy_RejectsInvalidAddr(t *testing.T) {
+func TestNew_RejectsInvalidAddr(t *testing.T) {
 	cases := []Config{
 		{Addr: "127.0.0.1"},
 		{Addr: "127.0.0.1:99999"},
@@ -93,7 +93,7 @@ func TestNewProxy_RejectsInvalidAddr(t *testing.T) {
 	}
 }
 
-func TestNewProxy_InitializesInternalFields(t *testing.T) {
+func TestNew_InitializesInternalFields(t *testing.T) {
 	cfg := Config{Addr: "127.0.0.1:8080"}
 
 	p, err := New(cfg)
@@ -127,7 +127,7 @@ func TestNewProxy_InitializesInternalFields(t *testing.T) {
 	}
 }
 
-func TestStopProxy_ReturnsErrorWhenNotRunning(t *testing.T) {
+func TestShutdown_ReturnsErrorWhenNotRunning(t *testing.T) {
 	p := newTestProxy(t)
 
 	if err := p.Shutdown(context.Background()); err == nil {
@@ -135,7 +135,7 @@ func TestStopProxy_ReturnsErrorWhenNotRunning(t *testing.T) {
 	}
 }
 
-func TestStartProxyAndStopProxy_Lifecycle(t *testing.T) {
+func TestStartAndShutdown_Lifecycle(t *testing.T) {
 	addr := freeAddr(t)
 	p := newTestProxyAtAddr(t, addr)
 
