@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	groxy "agent-proxy"
+	"github.com/SalzDevs/groxy"
 )
 
 func main() {
