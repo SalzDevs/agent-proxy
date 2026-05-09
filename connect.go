@@ -13,7 +13,8 @@ func (p *Proxy) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upstreamConn, err := net.Dial("tcp", target)
+	dialer := net.Dialer{Timeout: p.config.Timeouts.Dial}
+	upstreamConn, err := dialer.DialContext(r.Context(), "tcp", target)
 	if err != nil {
 		http.Error(w, "failed to connect to target", http.StatusBadGateway)
 		return

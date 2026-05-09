@@ -157,6 +157,21 @@ func TestNew_InitializesInternalFields(t *testing.T) {
 	if p.server.Addr != cfg.Addr {
 		t.Fatalf("server addr = %q, want %q", p.server.Addr, cfg.Addr)
 	}
+	if p.server.ReadHeaderTimeout != p.config.Timeouts.ReadHeader {
+		t.Fatalf("server read header timeout = %s, want %s", p.server.ReadHeaderTimeout, p.config.Timeouts.ReadHeader)
+	}
+	if p.server.IdleTimeout != p.config.Timeouts.Idle {
+		t.Fatalf("server idle timeout = %s, want %s", p.server.IdleTimeout, p.config.Timeouts.Idle)
+	}
+	if p.transport.TLSHandshakeTimeout != p.config.Timeouts.TLSHandshake {
+		t.Fatalf("transport TLS handshake timeout = %s, want %s", p.transport.TLSHandshakeTimeout, p.config.Timeouts.TLSHandshake)
+	}
+	if p.transport.ResponseHeaderTimeout != p.config.Timeouts.ResponseHeader {
+		t.Fatalf("transport response header timeout = %s, want %s", p.transport.ResponseHeaderTimeout, p.config.Timeouts.ResponseHeader)
+	}
+	if p.transport.IdleConnTimeout != p.config.Timeouts.IdleConn {
+		t.Fatalf("transport idle conn timeout = %s, want %s", p.transport.IdleConnTimeout, p.config.Timeouts.IdleConn)
+	}
 	if p.client.Transport != p.transport {
 		t.Fatalf("client transport = %#v, want %#v", p.client.Transport, p.transport)
 	}

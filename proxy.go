@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"sync"
 )
@@ -34,11 +35,22 @@ func New(config Config) (*Proxy, error) {
 		return nil, err
 	}
 
-	transport := &http.Transport{}
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: timeouts.Dial,
+		}).DialContext,
+		TLSHandshakeTimeout:   timeouts.TLSHandshake,
+		ResponseHeaderTimeout: timeouts.ResponseHeader,
+		IdleConnTimeout:       timeouts.IdleConn,
+	}
 
 	proxy := &Proxy{
-		config:    config,
-		server:    &http.Server{Addr: config.Addr},
+		config: config,
+		server: &http.Server{
+			Addr:              config.Addr,
+			ReadHeaderTimeout: timeouts.ReadHeader,
+			IdleTimeout:       timeouts.Idle,
+		},
 		client:    &http.Client{Transport: transport},
 		transport: transport,
 		running:   false,
