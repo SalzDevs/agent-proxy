@@ -1,1 +1,27 @@
-*.txt
+# Binaries
+/groxy
+/bin/
+/dist/
+*.exe
+*.out
+*.test
+
+# Test and coverage output
+coverage.out
+coverage.html
+*.coverprofile
+
+# Profiling output
+*.prof
+*.pprof
+cpu.out
+mem.out
+
+# Temporary files
+*.tmp
+*.log
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
