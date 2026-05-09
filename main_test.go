@@ -394,6 +394,31 @@ func TestOnRequest_ModifiesUpstreamRequest(t *testing.T) {
 	}
 }
 
+func TestMiddlewareNames(t *testing.T) {
+	cases := []struct {
+		middleware Middleware
+		want       string
+	}{
+		{OnRequest(func(ctx *RequestContext) error { return nil }), "OnRequest"},
+		{OnResponse(func(ctx *ResponseContext) error { return nil }), "OnResponse"},
+		{OnConnect(func(ctx *ConnectContext) error { return nil }), "OnConnect"},
+		{AddRequestHeader("X-Test", "true"), "AddRequestHeader"},
+		{AddResponseHeader("X-Test", "true"), "AddResponseHeader"},
+		{RemoveRequestHeader("X-Test"), "RemoveRequestHeader"},
+		{RemoveResponseHeader("X-Test"), "RemoveResponseHeader"},
+		{BlockHost("example.com", http.StatusForbidden, "blocked"), "BlockHost"},
+		{BlockConnectHost("example.com", http.StatusForbidden, "blocked"), "BlockConnectHost"},
+		{TransformRequestBody(func(body []byte) ([]byte, error) { return body, nil }), "TransformRequestBody"},
+		{TransformResponseBody(func(body []byte) ([]byte, error) { return body, nil }), "TransformResponseBody"},
+	}
+
+	for _, tc := range cases {
+		if got := tc.middleware.Name(); got != tc.want {
+			t.Fatalf("middleware name = %q, want %q", got, tc.want)
+		}
+	}
+}
+
 func TestAddAndRemoveRequestHeaderMiddleware(t *testing.T) {
 	seen := make(chan capturedRequest, 1)
 

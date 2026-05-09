@@ -29,11 +29,17 @@ type ConnectContext struct {
 
 // Middleware configures proxy behavior.
 type Middleware interface {
+	Name() string
 	apply(*Proxy)
 }
 
 type requestMiddleware struct {
+	name string
 	hook RequestHook
+}
+
+func (m requestMiddleware) Name() string {
+	return m.name
 }
 
 func (m requestMiddleware) apply(p *Proxy) {
@@ -41,7 +47,12 @@ func (m requestMiddleware) apply(p *Proxy) {
 }
 
 type responseMiddleware struct {
+	name string
 	hook ResponseHook
+}
+
+func (m responseMiddleware) Name() string {
+	return m.name
 }
 
 func (m responseMiddleware) apply(p *Proxy) {
@@ -49,26 +60,43 @@ func (m responseMiddleware) apply(p *Proxy) {
 }
 
 type connectMiddleware struct {
+	name string
 	hook ConnectHook
+}
+
+func (m connectMiddleware) Name() string {
+	return m.name
 }
 
 func (m connectMiddleware) apply(p *Proxy) {
 	p.connectHooks = append(p.connectHooks, m.hook)
 }
 
+func newRequestMiddleware(name string, fn RequestHook) Middleware {
+	return requestMiddleware{name: name, hook: fn}
+}
+
+func newResponseMiddleware(name string, fn ResponseHook) Middleware {
+	return responseMiddleware{name: name, hook: fn}
+}
+
+func newConnectMiddleware(name string, fn ConnectHook) Middleware {
+	return connectMiddleware{name: name, hook: fn}
+}
+
 // OnRequest creates middleware that runs fn before HTTP requests are sent upstream.
 func OnRequest(fn RequestHook) Middleware {
-	return requestMiddleware{hook: fn}
+	return newRequestMiddleware("OnRequest", fn)
 }
 
 // OnResponse creates middleware that runs fn before HTTP responses are sent to the client.
 func OnResponse(fn ResponseHook) Middleware {
-	return responseMiddleware{hook: fn}
+	return newResponseMiddleware("OnResponse", fn)
 }
 
 // OnConnect creates middleware that runs fn before CONNECT tunnels are opened.
 func OnConnect(fn ConnectHook) Middleware {
-	return connectMiddleware{hook: fn}
+	return newConnectMiddleware("OnConnect", fn)
 }
 
 // Use adds middleware to the proxy.

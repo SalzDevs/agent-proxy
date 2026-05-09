@@ -8,7 +8,7 @@ type BodyTransform func([]byte) ([]byte, error)
 // AddRequestHeader returns middleware that sets a request header before the
 // request is sent upstream.
 func AddRequestHeader(key, value string) Middleware {
-	return OnRequest(func(ctx *RequestContext) error {
+	return newRequestMiddleware("AddRequestHeader", func(ctx *RequestContext) error {
 		ctx.Request.Header.Set(key, value)
 		return nil
 	})
@@ -17,7 +17,7 @@ func AddRequestHeader(key, value string) Middleware {
 // AddResponseHeader returns middleware that sets a response header before the
 // response is sent back to the client.
 func AddResponseHeader(key, value string) Middleware {
-	return OnResponse(func(ctx *ResponseContext) error {
+	return newResponseMiddleware("AddResponseHeader", func(ctx *ResponseContext) error {
 		ctx.Response.Header.Set(key, value)
 		return nil
 	})
@@ -26,7 +26,7 @@ func AddResponseHeader(key, value string) Middleware {
 // RemoveRequestHeader returns middleware that deletes a request header before
 // the request is sent upstream.
 func RemoveRequestHeader(key string) Middleware {
-	return OnRequest(func(ctx *RequestContext) error {
+	return newRequestMiddleware("RemoveRequestHeader", func(ctx *RequestContext) error {
 		ctx.Request.Header.Del(key)
 		return nil
 	})
@@ -35,7 +35,7 @@ func RemoveRequestHeader(key string) Middleware {
 // RemoveResponseHeader returns middleware that deletes a response header before
 // the response is sent back to the client.
 func RemoveResponseHeader(key string) Middleware {
-	return OnResponse(func(ctx *ResponseContext) error {
+	return newResponseMiddleware("RemoveResponseHeader", func(ctx *ResponseContext) error {
 		ctx.Response.Header.Del(key)
 		return nil
 	})
@@ -43,7 +43,7 @@ func RemoveResponseHeader(key string) Middleware {
 
 // BlockHost returns middleware that blocks normal HTTP requests to host.
 func BlockHost(host string, statusCode int, message string) Middleware {
-	return OnRequest(func(ctx *RequestContext) error {
+	return newRequestMiddleware("BlockHost", func(ctx *RequestContext) error {
 		if ctx.Request.URL.Hostname() == host {
 			return Block(statusCode, message)
 		}
@@ -54,7 +54,7 @@ func BlockHost(host string, statusCode int, message string) Middleware {
 
 // BlockConnectHost returns middleware that blocks CONNECT tunnels to host.
 func BlockConnectHost(host string, statusCode int, message string) Middleware {
-	return OnConnect(func(ctx *ConnectContext) error {
+	return newConnectMiddleware("BlockConnectHost", func(ctx *ConnectContext) error {
 		if connectHostname(ctx.Host) == host {
 			return Block(statusCode, message)
 		}
@@ -66,7 +66,7 @@ func BlockConnectHost(host string, statusCode int, message string) Middleware {
 // TransformRequestBody returns middleware that replaces a request body with the
 // bytes returned by transform.
 func TransformRequestBody(transform BodyTransform) Middleware {
-	return OnRequest(func(ctx *RequestContext) error {
+	return newRequestMiddleware("TransformRequestBody", func(ctx *RequestContext) error {
 		body, err := ctx.BodyBytes()
 		if err != nil {
 			return err
@@ -85,7 +85,7 @@ func TransformRequestBody(transform BodyTransform) Middleware {
 // TransformResponseBody returns middleware that replaces a response body with
 // the bytes returned by transform.
 func TransformResponseBody(transform BodyTransform) Middleware {
-	return OnResponse(func(ctx *ResponseContext) error {
+	return newResponseMiddleware("TransformResponseBody", func(ctx *ResponseContext) error {
 		body, err := ctx.BodyBytes()
 		if err != nil {
 			return err
