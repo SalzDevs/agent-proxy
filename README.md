@@ -2,6 +2,9 @@
 
 Groxy is a small Go library for building forward proxy servers.
 
+> **Status:** Groxy is currently pre-v1. The API is usable, but breaking changes
+> may still happen before a stable `v1.0.0` release.
+
 It supports:
 
 - HTTP request forwarding
