@@ -394,6 +394,118 @@ func TestOnRequest_ModifiesUpstreamRequest(t *testing.T) {
 	}
 }
 
+func TestAddAndRemoveRequestHeaderMiddleware(t *testing.T) {
+	seen := make(chan capturedRequest, 1)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen <- capturedRequest{
+			XTest:       r.Header.Get("X-Test"),
+			ContentType: r.Header.Get("Content-Type"),
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	p := newTestProxy(t)
+	p.Use(
+		AddRequestHeader("X-Test", "added"),
+		RemoveRequestHeader("Content-Type"),
+	)
+
+	req, err := http.NewRequest(http.MethodGet, upstream.URL, nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+
+	got := <-seen
+	if got.XTest != "added" {
+		t.Fatalf("upstream X-Test = %q, want %q", got.XTest, "added")
+	}
+	if got.ContentType != "" {
+		t.Fatalf("upstream Content-Type = %q, want empty", got.ContentType)
+	}
+}
+
+func TestAddAndRemoveResponseHeaderMiddleware(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Server", "upstream")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	p := newTestProxy(t)
+	p.Use(
+		AddResponseHeader("X-Groxy", "true"),
+		RemoveResponseHeader("Server"),
+	)
+
+	req, err := http.NewRequest(http.MethodGet, upstream.URL, nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("X-Groxy"); got != "true" {
+		t.Fatalf("response X-Groxy = %q, want %q", got, "true")
+	}
+	if got := rec.Header().Get("Server"); got != "" {
+		t.Fatalf("response Server = %q, want empty", got)
+	}
+}
+
+func TestBlockHostMiddleware(t *testing.T) {
+	called := false
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+	defer upstream.Close()
+
+	p := newTestProxy(t)
+	p.Use(BlockHost("127.0.0.1", http.StatusForbidden, "blocked host"))
+
+	req, err := http.NewRequest(http.MethodGet, upstream.URL, nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+	if !strings.Contains(rec.Body.String(), "blocked host") {
+		t.Fatalf("body = %q, want block message", rec.Body.String())
+	}
+	if called {
+		t.Fatal("expected upstream not to be called")
+	}
+}
+
+func TestBlockConnectHostMiddleware(t *testing.T) {
+	p := newTestProxy(t)
+	p.Use(BlockConnectHost("example.com", http.StatusForbidden, "connect blocked"))
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodConnect, "//example.com:443", nil)
+	req.Host = "example.com:443"
+
+	p.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+	if !strings.Contains(rec.Body.String(), "connect blocked") {
+		t.Fatalf("body = %q, want block message", rec.Body.String())
+	}
+}
+
 func TestRequestContext_BodyBytesAndSetBody(t *testing.T) {
 	seen := make(chan string, 1)
 
