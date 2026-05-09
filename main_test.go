@@ -154,6 +154,9 @@ func TestNew_InitializesInternalFields(t *testing.T) {
 	if p.transport == nil {
 		t.Fatal("expected transport to be initialized")
 	}
+	if p.logger == nil {
+		t.Fatal("expected logger to be initialized")
+	}
 	if p.server.Addr != cfg.Addr {
 		t.Fatalf("server addr = %q, want %q", p.server.Addr, cfg.Addr)
 	}

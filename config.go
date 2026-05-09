@@ -21,6 +21,11 @@ type Config struct {
 	// If nil, Groxy uses DefaultTimeouts. If provided, zero-valued fields are
 	// filled with their default values.
 	Timeouts *Timeouts
+
+	// Logger receives log messages from the proxy.
+	//
+	// If nil, Groxy discards log messages.
+	Logger Logger
 }
 
 // Timeouts contains timeout settings for client, upstream, and idle proxy connections.

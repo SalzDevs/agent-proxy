@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"sync"
@@ -19,6 +18,7 @@ type Proxy struct {
 	server    *http.Server
 	client    *http.Client
 	transport *http.Transport
+	logger    Logger
 	running   bool
 	mu        sync.RWMutex
 }
@@ -30,6 +30,8 @@ type Proxy struct {
 func New(config Config) (*Proxy, error) {
 	timeouts := resolveTimeouts(config.Timeouts)
 	config.Timeouts = &timeouts
+	logger := resolveLogger(config.Logger)
+	config.Logger = logger
 
 	if err := validateConfig(config); err != nil {
 		return nil, err
@@ -53,6 +55,7 @@ func New(config Config) (*Proxy, error) {
 		},
 		client:    &http.Client{Transport: transport},
 		transport: transport,
+		logger:    logger,
 		running:   false,
 	}
 
@@ -86,7 +89,7 @@ func (p *Proxy) Start() error {
 	p.setRunning(true)
 	defer p.setRunning(false)
 
-	log.Printf("Starting proxy server on %s", p.config.Addr)
+	p.logger.Printf("Starting proxy server on %s", p.config.Addr)
 	if err := p.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
@@ -104,6 +107,6 @@ func (p *Proxy) Shutdown(ctx context.Context) error {
 	}
 
 	defer p.setRunning(false)
-	log.Printf("Stopping proxy server on %s", p.config.Addr)
+	p.logger.Printf("Stopping proxy server on %s", p.config.Addr)
 	return p.server.Shutdown(ctx)
 }

@@ -2,7 +2,6 @@ package groxy
 
 import (
 	"io"
-	"log"
 	"net/http"
 )
 
@@ -11,8 +10,7 @@ import (
 // ServeHTTP allows Proxy to satisfy http.Handler, so it can be mounted on a
 // custom http.Server instead of being started with Start.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Received request: %s %s", r.Method, r.URL.String())
-
+	p.logger.Printf("Received request: %s %s", r.Method, r.URL.String())
 	if r.Method == http.MethodConnect {
 		p.handleCONNECT(w, r)
 		return
