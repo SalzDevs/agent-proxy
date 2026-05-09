@@ -1,6 +1,9 @@
 package groxy
 
-import "net/http"
+import (
+	"fmt"
+	"net/http"
+)
 
 // RequestHook is called before a normal HTTP request is sent upstream.
 type RequestHook func(*RequestContext) error
@@ -100,25 +103,39 @@ func OnConnect(fn ConnectHook) Middleware {
 }
 
 // Use adds middleware to the proxy.
-func (p *Proxy) Use(middleware ...Middleware) {
+//
+// Middleware must be registered before Start is called. Use returns an error if
+// middleware is added after the proxy has started.
+func (p *Proxy) Use(middleware ...Middleware) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	for _, m := range middleware {
-		if m != nil {
-			m.apply(p)
+		if m == nil {
+			continue
 		}
+
+		if p.running {
+			return fmt.Errorf("cannot add middleware %q after proxy has started", m.Name())
+		}
+
+		m.apply(p)
 	}
+
+	return nil
 }
 
 // OnRequest adds a request hook to the proxy.
-func (p *Proxy) OnRequest(fn RequestHook) {
-	p.Use(OnRequest(fn))
+func (p *Proxy) OnRequest(fn RequestHook) error {
+	return p.Use(OnRequest(fn))
 }
 
 // OnResponse adds a response hook to the proxy.
-func (p *Proxy) OnResponse(fn ResponseHook) {
-	p.Use(OnResponse(fn))
+func (p *Proxy) OnResponse(fn ResponseHook) error {
+	return p.Use(OnResponse(fn))
 }
 
 // OnConnect adds a CONNECT hook to the proxy.
-func (p *Proxy) OnConnect(fn ConnectHook) {
-	p.Use(OnConnect(fn))
+func (p *Proxy) OnConnect(fn ConnectHook) error {
+	return p.Use(OnConnect(fn))
 }

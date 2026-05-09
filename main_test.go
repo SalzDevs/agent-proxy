@@ -419,6 +419,20 @@ func TestMiddlewareNames(t *testing.T) {
 	}
 }
 
+func TestUse_ReturnsErrorAfterProxyStarted(t *testing.T) {
+	p := newTestProxy(t)
+	p.setRunning(true)
+	defer p.setRunning(false)
+
+	err := p.Use(AddRequestHeader("X-Test", "true"))
+	if err == nil {
+		t.Fatal("expected error when adding middleware after proxy started, got nil")
+	}
+	if !strings.Contains(err.Error(), "AddRequestHeader") {
+		t.Fatalf("error = %q, want middleware name", err.Error())
+	}
+}
+
 func TestAddAndRemoveRequestHeaderMiddleware(t *testing.T) {
 	seen := make(chan capturedRequest, 1)
 
