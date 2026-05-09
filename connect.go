@@ -6,10 +6,26 @@ import (
 	"net/http"
 )
 
+func (p *Proxy) runConnectHooks(host string) error {
+	ctx := &ConnectContext{Host: host}
+	for _, hook := range p.connectHooks {
+		if err := hook(ctx); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (p *Proxy) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 	target := r.Host
 	if target == "" {
 		http.Error(w, "CONNECT request missing target host", http.StatusBadRequest)
+		return
+	}
+
+	if err := p.runConnectHooks(target); err != nil {
+		http.Error(w, "connect hook failed", http.StatusForbidden)
 		return
 	}
 

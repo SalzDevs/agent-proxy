@@ -3,6 +3,7 @@ package groxy
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -361,6 +362,132 @@ func TestHandleConnect_TunnelsTCPData(t *testing.T) {
 	}
 	if err := <-startErrCh; err != nil {
 		t.Fatalf("Start() returned error = %v", err)
+	}
+}
+
+func TestOnRequest_ModifiesUpstreamRequest(t *testing.T) {
+	seen := make(chan string, 1)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen <- r.Header.Get("X-Request-Hook")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	p := newTestProxy(t)
+	p.OnRequest(func(ctx *RequestContext) error {
+		ctx.Request.Header.Set("X-Request-Hook", "applied")
+		return nil
+	})
+
+	req, err := http.NewRequest(http.MethodGet, upstream.URL, nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+
+	if got := <-seen; got != "applied" {
+		t.Fatalf("upstream X-Request-Hook = %q, want %q", got, "applied")
+	}
+}
+
+func TestOnResponse_ModifiesDownstreamResponse(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	p := newTestProxy(t)
+	p.OnResponse(func(ctx *ResponseContext) error {
+		ctx.Response.Header.Set("X-Response-Hook", "applied")
+		return nil
+	})
+
+	req, err := http.NewRequest(http.MethodGet, upstream.URL, nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("X-Response-Hook"); got != "applied" {
+		t.Fatalf("response X-Response-Hook = %q, want %q", got, "applied")
+	}
+}
+
+func TestUse_AppliesMiddleware(t *testing.T) {
+	seen := make(chan string, 1)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen <- r.Header.Get("X-Use")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	p := newTestProxy(t)
+	p.Use(OnRequest(func(ctx *RequestContext) error {
+		ctx.Request.Header.Set("X-Use", "applied")
+		return nil
+	}))
+
+	req, err := http.NewRequest(http.MethodGet, upstream.URL, nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+
+	if got := <-seen; got != "applied" {
+		t.Fatalf("upstream X-Use = %q, want %q", got, "applied")
+	}
+}
+
+func TestOnRequest_ReturnsErrorBlocksForwarding(t *testing.T) {
+	called := false
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+	defer upstream.Close()
+
+	p := newTestProxy(t)
+	p.OnRequest(func(ctx *RequestContext) error {
+		return errors.New("blocked")
+	})
+
+	req, err := http.NewRequest(http.MethodGet, upstream.URL, nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+	if called {
+		t.Fatal("expected upstream not to be called")
+	}
+}
+
+func TestOnConnect_ReturnsErrorBlocksTunnel(t *testing.T) {
+	p := newTestProxy(t)
+	p.OnConnect(func(ctx *ConnectContext) error {
+		return errors.New("blocked")
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodConnect, "//example.com:443", nil)
+	req.Host = "example.com:443"
+
+	p.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
 	}
 }
 
