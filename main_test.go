@@ -2,6 +2,7 @@ package groxy
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -390,6 +391,74 @@ func TestOnRequest_ModifiesUpstreamRequest(t *testing.T) {
 
 	if got := <-seen; got != "applied" {
 		t.Fatalf("upstream X-Request-Hook = %q, want %q", got, "applied")
+	}
+}
+
+func TestRequestContext_BodyBytesAndSetBody(t *testing.T) {
+	seen := make(chan string, 1)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		seen <- string(body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	p := newTestProxy(t)
+	p.OnRequest(func(ctx *RequestContext) error {
+		body, err := ctx.BodyBytes()
+		if err != nil {
+			return err
+		}
+
+		ctx.SetBody(bytes.ToUpper(body))
+		return nil
+	})
+
+	req, err := http.NewRequest(http.MethodPost, upstream.URL, strings.NewReader("hello"))
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+
+	if got := <-seen; got != "HELLO" {
+		t.Fatalf("upstream body = %q, want %q", got, "HELLO")
+	}
+}
+
+func TestResponseContext_BodyBytesAndSetBody(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("hello"))
+	}))
+	defer upstream.Close()
+
+	p := newTestProxy(t)
+	p.OnResponse(func(ctx *ResponseContext) error {
+		body, err := ctx.BodyBytes()
+		if err != nil {
+			return err
+		}
+
+		ctx.SetBody(bytes.ToUpper(body))
+		return nil
+	})
+
+	req, err := http.NewRequest(http.MethodGet, upstream.URL, nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+
+	if rec.Body.String() != "HELLO" {
+		t.Fatalf("response body = %q, want %q", rec.Body.String(), "HELLO")
+	}
+	if rec.Header().Get("Content-Length") != "5" {
+		t.Fatalf("Content-Length = %q, want %q", rec.Header().Get("Content-Length"), "5")
 	}
 }
 
