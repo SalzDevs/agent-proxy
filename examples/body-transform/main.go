@@ -20,7 +20,7 @@ func main() {
 	//
 	// This is useful for redaction, rewriting, filtering, or things like token
 	// counting for AI prompts.
-	proxy.Use(
+	if err := proxy.Use(
 		// Transform the request body before it is sent upstream.
 		// This example replaces the word "secret" with "[redacted]".
 		groxy.TransformRequestBody(func(body []byte) ([]byte, error) {
@@ -32,7 +32,9 @@ func main() {
 		groxy.TransformResponseBody(func(body []byte) ([]byte, error) {
 			return bytes.ReplaceAll(body, []byte("Example Domain"), []byte("Groxy Domain")), nil
 		}),
-	)
+	); err != nil {
+		log.Fatalf("failed to add middleware: %v", err)
+	}
 
 	// Test the response transform with:
 	//

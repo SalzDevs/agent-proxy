@@ -60,19 +60,23 @@ curl -x http://127.0.0.1:8080 https://example.com
 Groxy middleware can inspect, modify, or block traffic.
 
 ```go
-proxy.Use(
+if err := proxy.Use(
 	groxy.AddRequestHeader("X-Groxy-Request", "true"),
 	groxy.AddResponseHeader("X-Groxy-Response", "true"),
-)
+); err != nil {
+	log.Fatal(err)
+}
 ```
 
 You can also use hooks directly:
 
 ```go
-proxy.OnRequest(func(ctx *groxy.RequestContext) error {
+if err := proxy.OnRequest(func(ctx *groxy.RequestContext) error {
 	ctx.Request.Header.Set("X-From-Groxy", "true")
 	return nil
-})
+}); err != nil {
+	log.Fatal(err)
+}
 ```
 
 Named functions work too:
@@ -83,7 +87,9 @@ func logRequest(ctx *groxy.RequestContext) error {
 	return nil
 }
 
-proxy.OnRequest(logRequest)
+if err := proxy.OnRequest(logRequest); err != nil {
+	log.Fatal(err)
+}
 ```
 
 ## Blocking traffic
@@ -91,22 +97,26 @@ proxy.OnRequest(logRequest)
 Use `groxy.Block` inside hooks:
 
 ```go
-proxy.OnRequest(func(ctx *groxy.RequestContext) error {
+if err := proxy.OnRequest(func(ctx *groxy.RequestContext) error {
 	if ctx.Request.URL.Hostname() == "blocked.example" {
 		return groxy.Block(403, "blocked by policy")
 	}
 
 	return nil
-})
+}); err != nil {
+	log.Fatal(err)
+}
 ```
 
 Or use built-in helpers:
 
 ```go
-proxy.Use(
+if err := proxy.Use(
 	groxy.BlockHost("blocked.example", 403, "blocked by groxy"),
 	groxy.BlockConnectHost("blocked.example", 403, "CONNECT blocked by groxy"),
-)
+); err != nil {
+	log.Fatal(err)
+}
 ```
 
 ## Body transforms
@@ -114,15 +124,19 @@ proxy.Use(
 Groxy can transform HTTP request and response bodies.
 
 ```go
-proxy.Use(groxy.TransformRequestBody(func(body []byte) ([]byte, error) {
+if err := proxy.Use(groxy.TransformRequestBody(func(body []byte) ([]byte, error) {
 	return bytes.ReplaceAll(body, []byte("secret"), []byte("[redacted]")), nil
-}))
+})); err != nil {
+	log.Fatal(err)
+}
 ```
 
 ```go
-proxy.Use(groxy.TransformResponseBody(func(body []byte) ([]byte, error) {
+if err := proxy.Use(groxy.TransformResponseBody(func(body []byte) ([]byte, error) {
 	return bytes.ReplaceAll(body, []byte("Example Domain"), []byte("Groxy Domain")), nil
-}))
+})); err != nil {
+	log.Fatal(err)
+}
 ```
 
 Note: HTTPS traffic uses CONNECT tunneling. Groxy cannot inspect or transform HTTPS request/response bodies unless TLS interception is added in the future.

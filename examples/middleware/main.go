@@ -21,7 +21,7 @@ func main() {
 
 	// Use installs reusable middleware.
 	// Middleware can inspect, modify, or block traffic flowing through the proxy.
-	proxy.Use(
+	if err := proxy.Use(
 		// Add a header to normal HTTP requests before they are sent upstream.
 		groxy.AddRequestHeader("X-Groxy-Request", "true"),
 
@@ -34,13 +34,21 @@ func main() {
 		// Block HTTPS tunnels to this host.
 		// HTTPS uses CONNECT, so it has a separate helper.
 		groxy.BlockConnectHost("blocked.example", 403, "CONNECT blocked by groxy"),
-	)
+	); err != nil {
+		log.Fatalf("failed to add middleware: %v", err)
+	}
 
 	// Hooks can also be regular named functions.
 	// This is useful when hook logic grows beyond a few lines.
-	proxy.OnRequest(logRequest)
-	proxy.OnResponse(logResponse)
-	proxy.OnConnect(logConnect)
+	if err := proxy.OnRequest(logRequest); err != nil {
+		log.Fatalf("failed to add request hook: %v", err)
+	}
+	if err := proxy.OnResponse(logResponse); err != nil {
+		log.Fatalf("failed to add response hook: %v", err)
+	}
+	if err := proxy.OnConnect(logConnect); err != nil {
+		log.Fatalf("failed to add connect hook: %v", err)
+	}
 
 	log.Printf("proxy listening on %s", proxy.Addr())
 	if err := proxy.Start(); err != nil {
