@@ -506,6 +506,78 @@ func TestBlockConnectHostMiddleware(t *testing.T) {
 	}
 }
 
+func TestTransformRequestBodyMiddleware(t *testing.T) {
+	seen := make(chan string, 1)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		seen <- string(body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	p := newTestProxy(t)
+	p.Use(TransformRequestBody(func(body []byte) ([]byte, error) {
+		return bytes.ToUpper(body), nil
+	}))
+
+	req, err := http.NewRequest(http.MethodPost, upstream.URL, strings.NewReader("hello"))
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+
+	if got := <-seen; got != "HELLO" {
+		t.Fatalf("upstream body = %q, want %q", got, "HELLO")
+	}
+}
+
+func TestTransformResponseBodyMiddleware(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("hello"))
+	}))
+	defer upstream.Close()
+
+	p := newTestProxy(t)
+	p.Use(TransformResponseBody(func(body []byte) ([]byte, error) {
+		return bytes.ToUpper(body), nil
+	}))
+
+	req, err := http.NewRequest(http.MethodGet, upstream.URL, nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+
+	if rec.Body.String() != "HELLO" {
+		t.Fatalf("response body = %q, want %q", rec.Body.String(), "HELLO")
+	}
+}
+
+func TestTransformRequestBodyMiddleware_ReturnsError(t *testing.T) {
+	p := newTestProxy(t)
+	p.Use(TransformRequestBody(func(body []byte) ([]byte, error) {
+		return nil, errors.New("transform failed")
+	}))
+
+	req, err := http.NewRequest(http.MethodPost, "http://example.com", strings.NewReader("hello"))
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
 func TestRequestContext_BodyBytesAndSetBody(t *testing.T) {
 	seen := make(chan string, 1)
 

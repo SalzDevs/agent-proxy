@@ -2,6 +2,9 @@ package groxy
 
 import "net"
 
+// BodyTransform transforms a request or response body.
+type BodyTransform func([]byte) ([]byte, error)
+
 // AddRequestHeader returns middleware that sets a request header before the
 // request is sent upstream.
 func AddRequestHeader(key, value string) Middleware {
@@ -56,6 +59,44 @@ func BlockConnectHost(host string, statusCode int, message string) Middleware {
 			return Block(statusCode, message)
 		}
 
+		return nil
+	})
+}
+
+// TransformRequestBody returns middleware that replaces a request body with the
+// bytes returned by transform.
+func TransformRequestBody(transform BodyTransform) Middleware {
+	return OnRequest(func(ctx *RequestContext) error {
+		body, err := ctx.BodyBytes()
+		if err != nil {
+			return err
+		}
+
+		updatedBody, err := transform(body)
+		if err != nil {
+			return err
+		}
+
+		ctx.SetBody(updatedBody)
+		return nil
+	})
+}
+
+// TransformResponseBody returns middleware that replaces a response body with
+// the bytes returned by transform.
+func TransformResponseBody(transform BodyTransform) Middleware {
+	return OnResponse(func(ctx *ResponseContext) error {
+		body, err := ctx.BodyBytes()
+		if err != nil {
+			return err
+		}
+
+		updatedBody, err := transform(body)
+		if err != nil {
+			return err
+		}
+
+		ctx.SetBody(updatedBody)
 		return nil
 	})
 }
