@@ -24,6 +24,14 @@ func benchmarkProxy(b *testing.B) *Proxy {
 	return p
 }
 
+func benchmarkUse(b *testing.B, p *Proxy, middleware ...Middleware) {
+	b.Helper()
+
+	if err := p.Use(middleware...); err != nil {
+		b.Fatalf("Use() error = %v", err)
+	}
+}
+
 func BenchmarkForwardHTTP_GET(b *testing.B) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("ok"))
@@ -86,7 +94,7 @@ func BenchmarkForwardHTTP_MultipleHooks(b *testing.B) {
 	defer upstream.Close()
 
 	p := benchmarkProxy(b)
-	p.Use(
+	benchmarkUse(b, p,
 		AddRequestHeader("X-One", "1"),
 		AddRequestHeader("X-Two", "2"),
 		RemoveRequestHeader("X-Remove"),
@@ -111,7 +119,7 @@ func BenchmarkTransformRequestBody_Large(b *testing.B) {
 	defer upstream.Close()
 
 	p := benchmarkProxy(b)
-	p.Use(TransformRequestBody(func(body []byte) ([]byte, error) {
+	benchmarkUse(b, p, TransformRequestBody(func(body []byte) ([]byte, error) {
 		return bytes.ReplaceAll(body, []byte("a"), []byte("b")), nil
 	}))
 	body := strings.Repeat("a", 1024*1024)
@@ -133,7 +141,7 @@ func BenchmarkTransformResponseBody_Large(b *testing.B) {
 	defer upstream.Close()
 
 	p := benchmarkProxy(b)
-	p.Use(TransformResponseBody(func(body []byte) ([]byte, error) {
+	benchmarkUse(b, p, TransformResponseBody(func(body []byte) ([]byte, error) {
 		return bytes.ReplaceAll(body, []byte("a"), []byte("b")), nil
 	}))
 
@@ -148,7 +156,7 @@ func BenchmarkTransformResponseBody_Large(b *testing.B) {
 
 func BenchmarkBlockHost(b *testing.B) {
 	p := benchmarkProxy(b)
-	p.Use(BlockHost("blocked.example", http.StatusForbidden, "blocked"))
+	benchmarkUse(b, p, BlockHost("blocked.example", http.StatusForbidden, "blocked"))
 
 	b.ReportAllocs()
 	b.ResetTimer()

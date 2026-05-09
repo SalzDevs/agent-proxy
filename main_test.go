@@ -75,6 +75,38 @@ func waitForTCP(t *testing.T, addr string) {
 	t.Fatalf("timed out waiting for %s to accept connections", addr)
 }
 
+func mustUse(t *testing.T, p *Proxy, middleware ...Middleware) {
+	t.Helper()
+
+	if err := p.Use(middleware...); err != nil {
+		t.Fatalf("Use() error = %v", err)
+	}
+}
+
+func mustOnRequest(t *testing.T, p *Proxy, fn RequestHook) {
+	t.Helper()
+
+	if err := p.OnRequest(fn); err != nil {
+		t.Fatalf("OnRequest() error = %v", err)
+	}
+}
+
+func mustOnResponse(t *testing.T, p *Proxy, fn ResponseHook) {
+	t.Helper()
+
+	if err := p.OnResponse(fn); err != nil {
+		t.Fatalf("OnResponse() error = %v", err)
+	}
+}
+
+func mustOnConnect(t *testing.T, p *Proxy, fn ConnectHook) {
+	t.Helper()
+
+	if err := p.OnConnect(fn); err != nil {
+		t.Fatalf("OnConnect() error = %v", err)
+	}
+}
+
 func TestNew_RejectsEmptyAddr(t *testing.T) {
 	if _, err := New(Config{}); err == nil {
 		t.Fatal("expected error for empty address, got nil")
@@ -176,6 +208,9 @@ func TestNew_InitializesInternalFields(t *testing.T) {
 	}
 	if p.transport.IdleConnTimeout != p.config.Timeouts.IdleConn {
 		t.Fatalf("transport idle conn timeout = %s, want %s", p.transport.IdleConnTimeout, p.config.Timeouts.IdleConn)
+	}
+	if !p.transport.DisableCompression {
+		t.Fatal("expected transport compression to be disabled")
 	}
 	if p.client.Transport != p.transport {
 		t.Fatalf("client transport = %#v, want %#v", p.client.Transport, p.transport)
@@ -376,7 +411,7 @@ func TestOnRequest_ModifiesUpstreamRequest(t *testing.T) {
 	defer upstream.Close()
 
 	p := newTestProxy(t)
-	p.OnRequest(func(ctx *RequestContext) error {
+	mustOnRequest(t, p, func(ctx *RequestContext) error {
 		ctx.Request.Header.Set("X-Request-Hook", "applied")
 		return nil
 	})
@@ -446,7 +481,7 @@ func TestAddAndRemoveRequestHeaderMiddleware(t *testing.T) {
 	defer upstream.Close()
 
 	p := newTestProxy(t)
-	p.Use(
+	mustUse(t, p,
 		AddRequestHeader("X-Test", "added"),
 		RemoveRequestHeader("Content-Type"),
 	)
@@ -477,7 +512,7 @@ func TestAddAndRemoveResponseHeaderMiddleware(t *testing.T) {
 	defer upstream.Close()
 
 	p := newTestProxy(t)
-	p.Use(
+	mustUse(t, p,
 		AddResponseHeader("X-Groxy", "true"),
 		RemoveResponseHeader("Server"),
 	)
@@ -506,7 +541,7 @@ func TestBlockHostMiddleware(t *testing.T) {
 	defer upstream.Close()
 
 	p := newTestProxy(t)
-	p.Use(BlockHost("127.0.0.1", http.StatusForbidden, "blocked host"))
+	mustUse(t, p, BlockHost("127.0.0.1", http.StatusForbidden, "blocked host"))
 
 	req, err := http.NewRequest(http.MethodGet, upstream.URL, nil)
 	if err != nil {
@@ -529,7 +564,7 @@ func TestBlockHostMiddleware(t *testing.T) {
 
 func TestBlockConnectHostMiddleware(t *testing.T) {
 	p := newTestProxy(t)
-	p.Use(BlockConnectHost("example.com", http.StatusForbidden, "connect blocked"))
+	mustUse(t, p, BlockConnectHost("example.com", http.StatusForbidden, "connect blocked"))
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodConnect, "//example.com:443", nil)
@@ -556,7 +591,7 @@ func TestTransformRequestBodyMiddleware(t *testing.T) {
 	defer upstream.Close()
 
 	p := newTestProxy(t)
-	p.Use(TransformRequestBody(func(body []byte) ([]byte, error) {
+	mustUse(t, p, TransformRequestBody(func(body []byte) ([]byte, error) {
 		return bytes.ToUpper(body), nil
 	}))
 
@@ -581,7 +616,7 @@ func TestTransformResponseBodyMiddleware(t *testing.T) {
 	defer upstream.Close()
 
 	p := newTestProxy(t)
-	p.Use(TransformResponseBody(func(body []byte) ([]byte, error) {
+	mustUse(t, p, TransformResponseBody(func(body []byte) ([]byte, error) {
 		return bytes.ToUpper(body), nil
 	}))
 
@@ -600,7 +635,7 @@ func TestTransformResponseBodyMiddleware(t *testing.T) {
 
 func TestTransformRequestBodyMiddleware_ReturnsError(t *testing.T) {
 	p := newTestProxy(t)
-	p.Use(TransformRequestBody(func(body []byte) ([]byte, error) {
+	mustUse(t, p, TransformRequestBody(func(body []byte) ([]byte, error) {
 		return nil, errors.New("transform failed")
 	}))
 
@@ -628,7 +663,7 @@ func TestRequestContext_BodyBytesAndSetBody(t *testing.T) {
 	defer upstream.Close()
 
 	p := newTestProxy(t)
-	p.OnRequest(func(ctx *RequestContext) error {
+	mustOnRequest(t, p, func(ctx *RequestContext) error {
 		body, err := ctx.BodyBytes()
 		if err != nil {
 			return err
@@ -659,7 +694,7 @@ func TestResponseContext_BodyBytesAndSetBody(t *testing.T) {
 	defer upstream.Close()
 
 	p := newTestProxy(t)
-	p.OnResponse(func(ctx *ResponseContext) error {
+	mustOnResponse(t, p, func(ctx *ResponseContext) error {
 		body, err := ctx.BodyBytes()
 		if err != nil {
 			return err
@@ -692,7 +727,7 @@ func TestOnResponse_ModifiesDownstreamResponse(t *testing.T) {
 	defer upstream.Close()
 
 	p := newTestProxy(t)
-	p.OnResponse(func(ctx *ResponseContext) error {
+	mustOnResponse(t, p, func(ctx *ResponseContext) error {
 		ctx.Response.Header.Set("X-Response-Hook", "applied")
 		return nil
 	})
@@ -720,7 +755,7 @@ func TestUse_AppliesMiddleware(t *testing.T) {
 	defer upstream.Close()
 
 	p := newTestProxy(t)
-	p.Use(OnRequest(func(ctx *RequestContext) error {
+	mustUse(t, p, OnRequest(func(ctx *RequestContext) error {
 		ctx.Request.Header.Set("X-Use", "applied")
 		return nil
 	}))
@@ -746,7 +781,7 @@ func TestBlock_CreatesBlockResponse(t *testing.T) {
 	defer upstream.Close()
 
 	p := newTestProxy(t)
-	p.OnRequest(func(ctx *RequestContext) error {
+	mustOnRequest(t, p, func(ctx *RequestContext) error {
 		return Block(http.StatusForbidden, "blocked by policy")
 	})
 
@@ -777,7 +812,7 @@ func TestOnResponse_CanBlockResponse(t *testing.T) {
 	defer upstream.Close()
 
 	p := newTestProxy(t)
-	p.OnResponse(func(ctx *ResponseContext) error {
+	mustOnResponse(t, p, func(ctx *ResponseContext) error {
 		return Block(http.StatusUnavailableForLegalReasons, "response blocked")
 	})
 
@@ -799,7 +834,7 @@ func TestOnResponse_CanBlockResponse(t *testing.T) {
 
 func TestOnConnect_CanBlockTunnel(t *testing.T) {
 	p := newTestProxy(t)
-	p.OnConnect(func(ctx *ConnectContext) error {
+	mustOnConnect(t, p, func(ctx *ConnectContext) error {
 		return Block(http.StatusForbidden, "connect blocked")
 	})
 
@@ -825,7 +860,7 @@ func TestOnRequest_ReturnsErrorBlocksForwarding(t *testing.T) {
 	defer upstream.Close()
 
 	p := newTestProxy(t)
-	p.OnRequest(func(ctx *RequestContext) error {
+	mustOnRequest(t, p, func(ctx *RequestContext) error {
 		return errors.New("blocked")
 	})
 
@@ -847,7 +882,7 @@ func TestOnRequest_ReturnsErrorBlocksForwarding(t *testing.T) {
 
 func TestOnConnect_ReturnsErrorBlocksTunnel(t *testing.T) {
 	p := newTestProxy(t)
-	p.OnConnect(func(ctx *ConnectContext) error {
+	mustOnConnect(t, p, func(ctx *ConnectContext) error {
 		return errors.New("blocked")
 	})
 

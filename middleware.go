@@ -31,60 +31,44 @@ type ConnectContext struct {
 }
 
 // Middleware configures proxy behavior.
-type Middleware interface {
-	Name() string
-	apply(*Proxy)
+type Middleware struct {
+	name         string
+	requestHook  RequestHook
+	responseHook ResponseHook
+	connectHook  ConnectHook
 }
 
-type requestMiddleware struct {
-	name string
-	hook RequestHook
-}
+// Name returns the middleware name used in logs and error messages.
+func (m Middleware) Name() string {
+	if m.name == "" {
+		return "Middleware"
+	}
 
-func (m requestMiddleware) Name() string {
 	return m.name
 }
 
-func (m requestMiddleware) apply(p *Proxy) {
-	p.requestHooks = append(p.requestHooks, m.hook)
-}
-
-type responseMiddleware struct {
-	name string
-	hook ResponseHook
-}
-
-func (m responseMiddleware) Name() string {
-	return m.name
-}
-
-func (m responseMiddleware) apply(p *Proxy) {
-	p.responseHooks = append(p.responseHooks, m.hook)
-}
-
-type connectMiddleware struct {
-	name string
-	hook ConnectHook
-}
-
-func (m connectMiddleware) Name() string {
-	return m.name
-}
-
-func (m connectMiddleware) apply(p *Proxy) {
-	p.connectHooks = append(p.connectHooks, m.hook)
+func (m Middleware) apply(p *Proxy) {
+	if m.requestHook != nil {
+		p.requestHooks = append(p.requestHooks, m.requestHook)
+	}
+	if m.responseHook != nil {
+		p.responseHooks = append(p.responseHooks, m.responseHook)
+	}
+	if m.connectHook != nil {
+		p.connectHooks = append(p.connectHooks, m.connectHook)
+	}
 }
 
 func newRequestMiddleware(name string, fn RequestHook) Middleware {
-	return requestMiddleware{name: name, hook: fn}
+	return Middleware{name: name, requestHook: fn}
 }
 
 func newResponseMiddleware(name string, fn ResponseHook) Middleware {
-	return responseMiddleware{name: name, hook: fn}
+	return Middleware{name: name, responseHook: fn}
 }
 
 func newConnectMiddleware(name string, fn ConnectHook) Middleware {
-	return connectMiddleware{name: name, hook: fn}
+	return Middleware{name: name, connectHook: fn}
 }
 
 // OnRequest creates middleware that runs fn before HTTP requests are sent upstream.
@@ -104,17 +88,14 @@ func OnConnect(fn ConnectHook) Middleware {
 
 // Use adds middleware to the proxy.
 //
-// Middleware must be registered before Start is called. Use returns an error if
-// middleware is added after the proxy has started.
+// Middleware must be registered before Start is called or before the proxy is
+// used to serve requests through ServeHTTP. Use returns an error if middleware
+// is added after the proxy has started.
 func (p *Proxy) Use(middleware ...Middleware) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	for _, m := range middleware {
-		if m == nil {
-			continue
-		}
-
 		if p.running {
 			return fmt.Errorf("cannot add middleware %q after proxy has started", m.Name())
 		}

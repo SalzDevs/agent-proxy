@@ -47,6 +47,7 @@ func New(config Config) (*Proxy, error) {
 		TLSHandshakeTimeout:   timeouts.TLSHandshake,
 		ResponseHeaderTimeout: timeouts.ResponseHeader,
 		IdleConnTimeout:       timeouts.IdleConn,
+		DisableCompression:    true,
 	}
 
 	proxy := &Proxy{

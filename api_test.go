@@ -26,13 +26,15 @@ func TestPublicAPI_UseMiddleware(t *testing.T) {
 		t.Fatalf("groxy.New() error = %v", err)
 	}
 
-	proxy.Use(
+	if err := proxy.Use(
 		groxy.AddRequestHeader("X-Groxy-Request", "true"),
 		groxy.AddResponseHeader("X-Groxy-Response", "true"),
 		groxy.TransformResponseBody(func(body []byte) ([]byte, error) {
 			return bytes.ToUpper(body), nil
 		}),
-	)
+	); err != nil {
+		t.Fatalf("proxy.Use() error = %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, upstream.URL, nil)
 	rec := httptest.NewRecorder()
@@ -59,7 +61,9 @@ func TestPublicAPI_Block(t *testing.T) {
 		t.Fatalf("groxy.New() error = %v", err)
 	}
 
-	proxy.Use(groxy.BlockHost("blocked.example", http.StatusForbidden, "blocked"))
+	if err := proxy.Use(groxy.BlockHost("blocked.example", http.StatusForbidden, "blocked")); err != nil {
+		t.Fatalf("proxy.Use() error = %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "http://blocked.example/", nil)
 	rec := httptest.NewRecorder()
