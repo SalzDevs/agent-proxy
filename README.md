@@ -181,6 +181,17 @@ Run race tests:
 go test -race ./...
 ```
 
+Run benchmarks:
+
+```bash
+go test -bench=. -benchmem ./...
+```
+
+Benchmarks cover HTTP forwarding, middleware overhead, body transforms, blocking,
+and CONNECT tunneling. Results depend on your machine, Go version, OS, and
+network environment, so treat them as local performance baselines rather than
+universal numbers.
+
 Run vet:
 
 ```bash
