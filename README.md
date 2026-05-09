@@ -198,6 +198,10 @@ Run vet:
 go vet ./...
 ```
 
+## License
+
+Groxy is released under the [MIT License](LICENSE).
+
 ## Current limitations
 
 - HTTPS traffic is tunneled, not decrypted.
