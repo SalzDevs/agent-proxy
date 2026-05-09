@@ -446,6 +446,85 @@ func TestUse_AppliesMiddleware(t *testing.T) {
 	}
 }
 
+func TestBlock_CreatesBlockResponse(t *testing.T) {
+	called := false
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+	defer upstream.Close()
+
+	p := newTestProxy(t)
+	p.OnRequest(func(ctx *RequestContext) error {
+		return Block(http.StatusForbidden, "blocked by policy")
+	})
+
+	req, err := http.NewRequest(http.MethodGet, upstream.URL, nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+	if !strings.Contains(rec.Body.String(), "blocked by policy") {
+		t.Fatalf("body = %q, want block message", rec.Body.String())
+	}
+	if called {
+		t.Fatal("expected upstream not to be called")
+	}
+}
+
+func TestOnResponse_CanBlockResponse(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("upstream response"))
+	}))
+	defer upstream.Close()
+
+	p := newTestProxy(t)
+	p.OnResponse(func(ctx *ResponseContext) error {
+		return Block(http.StatusUnavailableForLegalReasons, "response blocked")
+	})
+
+	req, err := http.NewRequest(http.MethodGet, upstream.URL, nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnavailableForLegalReasons {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnavailableForLegalReasons)
+	}
+	if !strings.Contains(rec.Body.String(), "response blocked") {
+		t.Fatalf("body = %q, want block message", rec.Body.String())
+	}
+}
+
+func TestOnConnect_CanBlockTunnel(t *testing.T) {
+	p := newTestProxy(t)
+	p.OnConnect(func(ctx *ConnectContext) error {
+		return Block(http.StatusForbidden, "connect blocked")
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodConnect, "//example.com:443", nil)
+	req.Host = "example.com:443"
+
+	p.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+	if !strings.Contains(rec.Body.String(), "connect blocked") {
+		t.Fatalf("body = %q, want block message", rec.Body.String())
+	}
+}
+
 func TestOnRequest_ReturnsErrorBlocksForwarding(t *testing.T) {
 	called := false
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -58,6 +58,11 @@ func (p *Proxy) handleForwardHTTP(w http.ResponseWriter, r *http.Request) {
 	outReq.Host = r.URL.Host
 
 	if err := p.runRequestHooks(outReq); err != nil {
+		if block, ok := blockError(err); ok {
+			writeBlock(w, block)
+			return
+		}
+
 		http.Error(w, "request hook failed", http.StatusInternalServerError)
 		return
 	}
@@ -70,6 +75,11 @@ func (p *Proxy) handleForwardHTTP(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	if err := p.runResponseHooks(outReq, resp); err != nil {
+		if block, ok := blockError(err); ok {
+			writeBlock(w, block)
+			return
+		}
+
 		http.Error(w, "response hook failed", http.StatusBadGateway)
 		return
 	}

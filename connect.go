@@ -25,6 +25,11 @@ func (p *Proxy) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := p.runConnectHooks(target); err != nil {
+		if block, ok := blockError(err); ok {
+			writeBlock(w, block)
+			return
+		}
+
 		http.Error(w, "connect hook failed", http.StatusForbidden)
 		return
 	}
