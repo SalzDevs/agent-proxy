@@ -11,6 +11,9 @@ const (
 	defaultIdleTimeout           = 60 * time.Second
 )
 
+// DefaultMaxBodySize is the default maximum body size read by body helpers.
+const DefaultMaxBodySize int64 = 10 << 20 // 10 MiB
+
 // Config contains settings used to create a Proxy.
 type Config struct {
 	// Addr is the TCP address the proxy listens on, such as "127.0.0.1:8080".
@@ -21,6 +24,12 @@ type Config struct {
 	// If nil, Groxy uses DefaultTimeouts. If provided, zero-valued fields are
 	// filled with their default values.
 	Timeouts *Timeouts
+
+	// MaxBodySize is the maximum number of bytes BodyBytes and body transform
+	// middleware will read into memory.
+	//
+	// If zero, Groxy uses DefaultMaxBodySize.
+	MaxBodySize int64
 
 	// Logger receives log messages from the proxy.
 	//
@@ -75,6 +84,14 @@ func resolveTimeouts(custom *Timeouts) Timeouts {
 		ReadHeader:     durationOrDefault(custom.ReadHeader, defaults.ReadHeader),
 		Idle:           durationOrDefault(custom.Idle, defaults.Idle),
 	}
+}
+
+func resolveMaxBodySize(maxBodySize int64) int64 {
+	if maxBodySize == 0 {
+		return DefaultMaxBodySize
+	}
+
+	return maxBodySize
 }
 
 func durationOrDefault(value, fallback time.Duration) time.Duration {

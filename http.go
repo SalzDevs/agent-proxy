@@ -20,7 +20,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Proxy) runRequestHooks(r *http.Request) error {
-	ctx := &RequestContext{Request: r}
+	ctx := &RequestContext{Request: r, maxBodySize: p.config.MaxBodySize}
 	for _, hook := range p.requestHooks {
 		if err := hook(ctx); err != nil {
 			return err
@@ -31,7 +31,7 @@ func (p *Proxy) runRequestHooks(r *http.Request) error {
 }
 
 func (p *Proxy) runResponseHooks(req *http.Request, resp *http.Response) error {
-	ctx := &ResponseContext{Request: req, Response: resp}
+	ctx := &ResponseContext{Request: req, Response: resp, maxBodySize: p.config.MaxBodySize}
 	for _, hook := range p.responseHooks {
 		if err := hook(ctx); err != nil {
 			return err

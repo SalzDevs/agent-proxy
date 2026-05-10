@@ -18,6 +18,10 @@ func validateConfig(config Config) error {
 		}
 	}
 
+	if config.MaxBodySize < 0 {
+		return fmt.Errorf("invalid config: max body size cannot be negative")
+	}
+
 	return nil
 }
 

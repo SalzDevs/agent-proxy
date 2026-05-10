@@ -33,6 +33,7 @@ type Proxy struct {
 func New(config Config) (*Proxy, error) {
 	timeouts := resolveTimeouts(config.Timeouts)
 	config.Timeouts = &timeouts
+	config.MaxBodySize = resolveMaxBodySize(config.MaxBodySize)
 	logger := resolveLogger(config.Logger)
 	config.Logger = logger
 

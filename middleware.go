@@ -17,12 +17,16 @@ type ConnectHook func(*ConnectContext) error
 // RequestContext contains data available to request hooks.
 type RequestContext struct {
 	Request *http.Request
+
+	maxBodySize int64
 }
 
 // ResponseContext contains data available to response hooks.
 type ResponseContext struct {
 	Request  *http.Request
 	Response *http.Response
+
+	maxBodySize int64
 }
 
 // ConnectContext contains data available to CONNECT hooks.

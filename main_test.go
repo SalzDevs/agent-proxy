@@ -159,6 +159,15 @@ func TestNew_RejectsNegativeTimeout(t *testing.T) {
 	}
 }
 
+func TestNew_RejectsNegativeMaxBodySize(t *testing.T) {
+	if _, err := New(Config{
+		Addr:        "127.0.0.1:8080",
+		MaxBodySize: -1,
+	}); err == nil {
+		t.Fatal("expected error for negative max body size, got nil")
+	}
+}
+
 func TestNew_InitializesInternalFields(t *testing.T) {
 	cfg := Config{Addr: "127.0.0.1:8080"}
 
@@ -178,6 +187,9 @@ func TestNew_InitializesInternalFields(t *testing.T) {
 	}
 	if *p.config.Timeouts != DefaultTimeouts() {
 		t.Fatalf("proxy timeouts = %+v, want %+v", *p.config.Timeouts, DefaultTimeouts())
+	}
+	if p.config.MaxBodySize != DefaultMaxBodySize {
+		t.Fatalf("max body size = %d, want %d", p.config.MaxBodySize, DefaultMaxBodySize)
 	}
 	if p.server == nil {
 		t.Fatal("expected server to be initialized")
@@ -649,6 +661,55 @@ func TestTransformRequestBodyMiddleware_ReturnsError(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestBodyBytes_ReturnsErrorWhenRequestBodyTooLarge(t *testing.T) {
+	p, err := New(Config{Addr: "127.0.0.1:8080", MaxBodySize: 2})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	mustUse(t, p, TransformRequestBody(func(body []byte) ([]byte, error) {
+		return body, nil
+	}))
+
+	req, err := http.NewRequest(http.MethodPost, "http://example.com", strings.NewReader("hello"))
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestBodyBytes_ReturnsErrorWhenResponseBodyTooLarge(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("hello"))
+	}))
+	defer upstream.Close()
+
+	p, err := New(Config{Addr: "127.0.0.1:8080", MaxBodySize: 2})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	mustUse(t, p, TransformResponseBody(func(body []byte) ([]byte, error) {
+		return body, nil
+	}))
+
+	req, err := http.NewRequest(http.MethodGet, upstream.URL, nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadGateway)
 	}
 }
 

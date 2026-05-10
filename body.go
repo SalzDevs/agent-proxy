@@ -2,10 +2,21 @@ package groxy
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 )
+
+// BodyTooLargeError is returned when a body helper reads more than the
+// configured maximum body size.
+type BodyTooLargeError struct {
+	Limit int64
+}
+
+func (e *BodyTooLargeError) Error() string {
+	return fmt.Sprintf("body exceeds maximum size of %d bytes", e.Limit)
+}
 
 // BodyBytes reads and restores the request body.
 //
@@ -17,7 +28,7 @@ func (ctx *RequestContext) BodyBytes() ([]byte, error) {
 		return nil, nil
 	}
 
-	body, err := io.ReadAll(ctx.Request.Body)
+	body, err := readBodyWithLimit(ctx.Request.Body, ctx.maxBodySize)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +62,7 @@ func (ctx *ResponseContext) BodyBytes() ([]byte, error) {
 		return nil, nil
 	}
 
-	body, err := io.ReadAll(ctx.Response.Body)
+	body, err := readBodyWithLimit(ctx.Response.Body, ctx.maxBodySize)
 	if err != nil {
 		return nil, err
 	}
@@ -69,6 +80,23 @@ func (ctx *ResponseContext) SetBody(body []byte) {
 	ctx.Response.Body = io.NopCloser(bytes.NewReader(body))
 	ctx.Response.ContentLength = int64(len(body))
 	setContentLength(ctx.Response.Header, len(body))
+}
+
+func readBodyWithLimit(body io.Reader, limit int64) ([]byte, error) {
+	if limit <= 0 {
+		return io.ReadAll(body)
+	}
+
+	limited := io.LimitReader(body, limit+1)
+	data, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, &BodyTooLargeError{Limit: limit}
+	}
+
+	return data, nil
 }
 
 func setContentLength(header http.Header, length int) {
