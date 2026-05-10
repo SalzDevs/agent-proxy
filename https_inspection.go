@@ -32,10 +32,3 @@ type HTTPSInspectionConfig struct {
 	// silently bypassing inspection policy.
 	PassthroughOnError bool
 }
-
-// CA is a certificate authority used to sign per-host certificates for HTTPS
-// inspection.
-//
-// CA generation and loading helpers will be added as part of the HTTPS
-// inspection implementation.
-type CA struct{}
