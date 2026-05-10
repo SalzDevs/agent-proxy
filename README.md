@@ -192,6 +192,35 @@ proxy, err := groxy.New(groxy.Config{
 })
 ```
 
+### Trusting the Groxy CA
+
+`CA.WriteFiles("groxy-ca.pem", "groxy-ca-key.pem")` writes the public CA
+certificate and private key separately. Install only `groxy-ca.pem` on client
+devices; keep `groxy-ca-key.pem` private.
+
+Common trust-store setup:
+
+- **Firefox:** Settings → Privacy & Security → Certificates → View
+  Certificates → Authorities → Import, select `groxy-ca.pem`, then enable trust
+  for websites.
+- **Chrome/Chromium:** Chrome uses the operating system trust store on macOS and
+  Windows. On Linux, import the CA into the NSS database used by Chromium-based
+  browsers, for example with `certutil -A -d sql:$HOME/.pki/nssdb -n "Groxy Local
+  CA" -t "C,," -i groxy-ca.pem`.
+- **macOS:** Open Keychain Access, import `groxy-ca.pem` into the System or login
+  keychain, open the certificate, and set Trust → Secure Sockets Layer (SSL) to
+  Always Trust.
+- **Windows:** Run `certmgr.msc` or Manage User Certificates, then import
+  `groxy-ca.pem` into Trusted Root Certification Authorities → Certificates.
+- **Linux system trust:** Copy `groxy-ca.pem` to the distribution's local CA
+  directory and refresh trust, for example
+  `/usr/local/share/ca-certificates/groxy-ca.crt` with `update-ca-certificates`
+  on Debian/Ubuntu, or `/etc/pki/ca-trust/source/anchors/groxy-ca.pem` with
+  `update-ca-trust` on Fedora/RHEL.
+
+Restart the browser or application after importing the certificate. Remove the
+CA from the trust store when you no longer need HTTPS inspection.
+
 After enabling inspection, normal middleware works on matched HTTPS traffic:
 
 ```go
