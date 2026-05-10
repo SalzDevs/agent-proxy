@@ -198,6 +198,23 @@ func TestNew_RejectsHTTPSInspectionWithoutInterceptMatcher(t *testing.T) {
 	}
 }
 
+func TestNew_RejectsNegativeHTTPSInspectionCertificateTTL(t *testing.T) {
+	_, err := New(Config{
+		Addr: "127.0.0.1:8080",
+		HTTPSInspection: &HTTPSInspectionConfig{
+			CA:             &CA{},
+			Intercept:      func(host string) bool { return true },
+			CertificateTTL: -time.Second,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for negative certificate TTL, got nil")
+	}
+	if !strings.Contains(err.Error(), "certificate TTL cannot be negative") {
+		t.Fatalf("error = %q, want certificate TTL requirement", err.Error())
+	}
+}
+
 func TestNew_AcceptsHTTPSInspectionConfig(t *testing.T) {
 	p, err := New(Config{
 		Addr: "127.0.0.1:8080",

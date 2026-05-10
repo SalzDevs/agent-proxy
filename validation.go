@@ -40,6 +40,9 @@ func validateHTTPSInspection(config *HTTPSInspectionConfig) error {
 	if config.Intercept == nil {
 		return fmt.Errorf("HTTPS inspection intercept matcher is required")
 	}
+	if config.CertificateTTL < 0 {
+		return fmt.Errorf("HTTPS inspection certificate TTL cannot be negative")
+	}
 
 	return nil
 }

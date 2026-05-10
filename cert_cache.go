@@ -12,17 +12,26 @@ import (
 	"time"
 )
 
-const hostCertificateValidFor = 24 * time.Hour
+const (
+	defaultHostCertificateTTL  = 24 * time.Hour
+	hostCertificateRenewBefore = time.Hour
+)
 
 type certCache struct {
 	mu    sync.Mutex
 	ca    *CA
+	ttl   time.Duration
 	certs map[string]*tls.Certificate
 }
 
-func newCertCache(ca *CA) *certCache {
+func newCertCache(ca *CA, ttl time.Duration) *certCache {
+	if ttl == 0 {
+		ttl = defaultHostCertificateTTL
+	}
+
 	return &certCache{
 		ca:    ca,
+		ttl:   ttl,
 		certs: make(map[string]*tls.Certificate),
 	}
 }
@@ -40,7 +49,7 @@ func (c *certCache) get(host string) (*tls.Certificate, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if cert := c.certs[host]; cert != nil {
+	if cert := c.certs[host]; cert != nil && !certificateNeedsRenewal(cert, time.Now()) {
 		return cert, nil
 	}
 
@@ -65,13 +74,18 @@ func (c *certCache) generate(host string) (*tls.Certificate, error) {
 	}
 
 	now := time.Now()
+	notAfter := now.Add(c.ttl)
+	if notAfter.After(c.ca.cert.NotAfter) {
+		notAfter = c.ca.cert.NotAfter
+	}
+
 	template := &x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
 			CommonName: host,
 		},
 		NotBefore:             now.Add(-time.Minute),
-		NotAfter:              now.Add(hostCertificateValidFor),
+		NotAfter:              notAfter,
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
@@ -88,9 +102,22 @@ func (c *certCache) generate(host string) (*tls.Certificate, error) {
 		return nil, fmt.Errorf("create host certificate: %w", err)
 	}
 
+	leaf, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, fmt.Errorf("parse host certificate: %w", err)
+	}
+
 	return &tls.Certificate{
 		Certificate: [][]byte{der, c.ca.cert.Raw},
 		PrivateKey:  key,
-		Leaf:        template,
+		Leaf:        leaf,
 	}, nil
+}
+
+func certificateNeedsRenewal(cert *tls.Certificate, now time.Time) bool {
+	if cert == nil || cert.Leaf == nil {
+		return true
+	}
+
+	return !now.Add(hostCertificateRenewBefore).Before(cert.Leaf.NotAfter)
 }

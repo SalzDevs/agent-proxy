@@ -1,5 +1,7 @@
 package groxy
 
+import "time"
+
 // HostMatcher decides whether a host should be selected for HTTPS inspection.
 //
 // The host may include a port, such as "example.com:443". Matchers should
@@ -24,6 +26,12 @@ type HTTPSInspectionConfig struct {
 	// This field is required when HTTPS inspection is enabled. Use MatchAllHosts
 	// in a future release if you explicitly want to inspect every host.
 	Intercept HostMatcher
+
+	// CertificateTTL controls how long generated per-host certificates are valid.
+	//
+	// If zero, Groxy uses a safe default. Generated certificates are kept in
+	// memory only and renewed before they expire.
+	CertificateTTL time.Duration
 
 	// PassthroughOnError controls whether Groxy falls back to a normal CONNECT
 	// tunnel if HTTPS inspection setup fails.
