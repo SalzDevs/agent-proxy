@@ -37,6 +37,12 @@ func validateHTTPSInspection(config *HTTPSInspectionConfig) error {
 	if config.CA == nil {
 		return fmt.Errorf("HTTPS inspection CA is required")
 	}
+	if config.CA.cert == nil || config.CA.key == nil {
+		return fmt.Errorf("HTTPS inspection CA is not initialized")
+	}
+	if !config.CA.cert.IsCA {
+		return fmt.Errorf("HTTPS inspection certificate is not a CA")
+	}
 	if config.Intercept == nil {
 		return fmt.Errorf("HTTPS inspection intercept matcher is required")
 	}

@@ -38,10 +38,12 @@ func (p *Proxy) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if p.shouldInspectCONNECT(target) {
+		p.logger.Printf("Inspecting HTTPS CONNECT tunnel for %s", target)
 		p.inspectCONNECT(w, r, target)
 		return
 	}
 
+	p.logger.Printf("Tunneling CONNECT request for %s", target)
 	p.tunnelCONNECT(w, r, target)
 }
 
@@ -78,6 +80,12 @@ func (p *Proxy) inspectCONNECT(w http.ResponseWriter, r *http.Request, target st
 		return
 	}
 
+	cert, err := p.certCache.get(target)
+	if err != nil {
+		p.handleInspectionSetupError(w, r, target, err.Error())
+		return
+	}
+
 	clientConn, err := hijackCONNECT(w)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -90,15 +98,9 @@ func (p *Proxy) inspectCONNECT(w http.ResponseWriter, r *http.Request, target st
 	}
 
 	tlsConn := tls.Server(clientConn, &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		NextProtos: []string{"http/1.1"},
-		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			host := info.ServerName
-			if host == "" {
-				host = target
-			}
-			return p.certCache.get(host)
-		},
+		MinVersion:   tls.VersionTLS12,
+		NextProtos:   []string{"http/1.1"},
+		Certificates: []tls.Certificate{*cert},
 	})
 	defer tlsConn.Close()
 
@@ -112,11 +114,12 @@ func (p *Proxy) inspectCONNECT(w http.ResponseWriter, r *http.Request, target st
 
 func (p *Proxy) handleInspectionSetupError(w http.ResponseWriter, r *http.Request, target, message string) {
 	if p.config.HTTPSInspection != nil && p.config.HTTPSInspection.PassthroughOnError {
-		p.logger.Printf("HTTPS inspection for %s failed: %s; falling back to tunnel", target, message)
+		p.logger.Printf("HTTPS inspection setup for %s failed: %s; falling back to tunnel", target, message)
 		p.tunnelCONNECT(w, r, target)
 		return
 	}
 
+	p.logger.Printf("HTTPS inspection setup for %s failed closed: %s", target, message)
 	http.Error(w, message, http.StatusBadGateway)
 }
 

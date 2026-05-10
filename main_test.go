@@ -196,6 +196,22 @@ func TestNew_RejectsHTTPSInspectionWithoutCA(t *testing.T) {
 	}
 }
 
+func TestNew_RejectsUninitializedHTTPSInspectionCA(t *testing.T) {
+	_, err := New(Config{
+		Addr: "127.0.0.1:8080",
+		HTTPSInspection: &HTTPSInspectionConfig{
+			CA:        &CA{},
+			Intercept: func(host string) bool { return true },
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for uninitialized HTTPS inspection CA, got nil")
+	}
+	if !strings.Contains(err.Error(), "CA is not initialized") {
+		t.Fatalf("error = %q, want initialized CA requirement", err.Error())
+	}
+}
+
 func TestNew_RejectsHTTPSInspectionWithoutInterceptMatcher(t *testing.T) {
 	_, err := New(Config{
 		Addr: "127.0.0.1:8080",
