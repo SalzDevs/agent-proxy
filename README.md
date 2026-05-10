@@ -9,6 +9,7 @@ It supports:
 
 - HTTP request forwarding
 - HTTPS tunneling with `CONNECT`
+- opt-in HTTPS inspection with local TLS interception
 - middleware hooks for requests, responses, and CONNECT tunnels
 - request/response blocking
 - header helpers
@@ -151,7 +152,64 @@ proxy, err := groxy.New(groxy.Config{
 
 If `MaxBodySize` is zero, Groxy uses `DefaultMaxBodySize`.
 
-Note: HTTPS traffic uses CONNECT tunneling. Groxy cannot inspect or transform HTTPS request/response bodies unless TLS interception is added in the future.
+By default, HTTPS traffic uses CONNECT tunneling. Encrypted HTTPS bodies can only
+be inspected or transformed when HTTPS inspection is explicitly enabled.
+
+## HTTPS inspection
+
+Groxy can inspect selected HTTPS traffic using local TLS interception/MITM. This
+is **opt-in only**. Without this config, HTTPS traffic is tunneled normally and
+Groxy cannot read encrypted request or response bodies.
+
+> Only inspect traffic you own or are authorized to inspect. Users must install
+> and trust your Groxy CA certificate in their browser or operating system.
+
+```go
+ca, err := groxy.LoadCAFiles("groxy-ca.pem", "groxy-ca-key.pem")
+if err != nil {
+	ca, err = groxy.NewCA(groxy.CAConfig{
+		CommonName: "Groxy Local CA",
+		ValidFor:  365 * 24 * time.Hour,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := ca.WriteFiles("groxy-ca.pem", "groxy-ca-key.pem"); err != nil {
+		log.Fatal(err)
+	}
+}
+
+proxy, err := groxy.New(groxy.Config{
+	Addr: "127.0.0.1:8080",
+	HTTPSInspection: &groxy.HTTPSInspectionConfig{
+		CA:        ca,
+		Intercept: groxy.MatchHosts("example.com", "*.example.com"),
+	},
+})
+```
+
+After enabling inspection, normal middleware works on matched HTTPS traffic:
+
+```go
+if err := proxy.Use(groxy.TransformResponseBody(func(body []byte) ([]byte, error) {
+	return bytes.ReplaceAll(body, []byte("Example Domain"), []byte("Groxy Domain")), nil
+})); err != nil {
+	log.Fatal(err)
+}
+```
+
+Host matching helpers:
+
+```go
+groxy.MatchHosts("example.com", "*.example.org")
+groxy.MatchAllHosts() // explicitly inspect every CONNECT host
+```
+
+Current HTTPS inspection limitations:
+
+- intercepted client traffic is HTTP/1.1 over TLS
+- users must trust the generated CA manually
+- generated per-host certificates are kept in memory and renewed before expiry
 
 ## Timeouts
 
@@ -195,6 +253,7 @@ See:
 - [`examples/basic`](examples/basic)
 - [`examples/middleware`](examples/middleware)
 - [`examples/body-transform`](examples/body-transform)
+- [`examples/https-inspection`](examples/https-inspection)
 
 ## Development
 
@@ -233,8 +292,8 @@ Groxy is released under the [MIT License](LICENSE).
 
 ## Current limitations
 
-- HTTPS traffic is tunneled, not decrypted.
+- HTTPS traffic is tunneled by default; inspection requires explicit HTTPS inspection config and a trusted local CA.
 - Body transforms buffer the full body in memory.
-- No TLS interception/MITM support.
+- HTTPS inspection currently targets HTTP/1.1 over TLS.
 - No authentication helpers yet.
 - No metrics/observability helpers yet.
