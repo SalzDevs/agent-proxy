@@ -1,9 +1,13 @@
 # Groxy
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/SalzDevs/groxy.svg)](https://pkg.go.dev/github.com/SalzDevs/groxy)
+[![CI](https://github.com/SalzDevs/groxy/actions/workflows/ci.yml/badge.svg)](https://github.com/SalzDevs/groxy/actions/workflows/ci.yml)
+
 Groxy is a small Go library for building forward proxy servers.
 
 > **Status:** Groxy is currently pre-v1. The API is usable, but breaking changes
-> may still happen before a stable `v1.0.0` release.
+> may still happen before a stable `v1.0.0` release. See the
+> [roadmap](ROADMAP.md) for planned work.
 
 It supports:
 
@@ -254,6 +258,24 @@ See:
 - [`examples/middleware`](examples/middleware)
 - [`examples/body-transform`](examples/body-transform)
 - [`examples/https-inspection`](examples/https-inspection)
+
+## Roadmap
+
+See [`ROADMAP.md`](ROADMAP.md) for planned work and good first issue ideas.
+
+## Contributing
+
+Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup,
+testing, and pull request guidelines.
+
+## Security
+
+Please do not report security vulnerabilities in public issues. See
+[`SECURITY.md`](SECURITY.md) for responsible disclosure guidance.
+
+## Changelog
+
+See [`CHANGELOG.md`](CHANGELOG.md) for release history.
 
 ## Development
 
