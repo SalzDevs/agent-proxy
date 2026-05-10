@@ -139,6 +139,18 @@ if err := proxy.Use(groxy.TransformResponseBody(func(body []byte) ([]byte, error
 }
 ```
 
+Body helpers and body transform middleware buffer the full body in memory. Groxy
+limits how much data they can read with `Config.MaxBodySize`.
+
+```go
+proxy, err := groxy.New(groxy.Config{
+	Addr:        "127.0.0.1:8080",
+	MaxBodySize: 5 << 20, // 5 MiB
+})
+```
+
+If `MaxBodySize` is zero, Groxy uses `DefaultMaxBodySize`.
+
 Note: HTTPS traffic uses CONNECT tunneling. Groxy cannot inspect or transform HTTPS request/response bodies unless TLS interception is added in the future.
 
 ## Timeouts

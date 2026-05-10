@@ -10,6 +10,10 @@ import (
 func main() {
 	proxy, err := groxy.New(groxy.Config{
 		Addr: "127.0.0.1:8080",
+
+		// Body transforms buffer bodies in memory. MaxBodySize limits how much
+		// data Groxy will read for body helpers and transform middleware.
+		MaxBodySize: 5 << 20, // 5 MiB
 	})
 	if err != nil {
 		log.Fatalf("failed to create proxy: %v", err)
