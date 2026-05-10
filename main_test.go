@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"io"
 	"net"
@@ -73,6 +75,17 @@ func waitForTCP(t *testing.T, addr string) {
 	}
 
 	t.Fatalf("timed out waiting for %s to accept connections", addr)
+}
+
+func testCA(t *testing.T) *CA {
+	t.Helper()
+
+	ca, err := NewCA(CAConfig{CommonName: "Test Groxy CA"})
+	if err != nil {
+		t.Fatalf("NewCA() error = %v", err)
+	}
+
+	return ca
 }
 
 func mustUse(t *testing.T, p *Proxy, middleware ...Middleware) {
@@ -187,7 +200,7 @@ func TestNew_RejectsHTTPSInspectionWithoutInterceptMatcher(t *testing.T) {
 	_, err := New(Config{
 		Addr: "127.0.0.1:8080",
 		HTTPSInspection: &HTTPSInspectionConfig{
-			CA: &CA{},
+			CA: testCA(t),
 		},
 	})
 	if err == nil {
@@ -202,7 +215,7 @@ func TestNew_RejectsNegativeHTTPSInspectionCertificateTTL(t *testing.T) {
 	_, err := New(Config{
 		Addr: "127.0.0.1:8080",
 		HTTPSInspection: &HTTPSInspectionConfig{
-			CA:             &CA{},
+			CA:             testCA(t),
 			Intercept:      func(host string) bool { return true },
 			CertificateTTL: -time.Second,
 		},
@@ -219,7 +232,7 @@ func TestNew_AcceptsHTTPSInspectionConfig(t *testing.T) {
 	p, err := New(Config{
 		Addr: "127.0.0.1:8080",
 		HTTPSInspection: &HTTPSInspectionConfig{
-			CA:        &CA{},
+			CA:        testCA(t),
 			Intercept: func(host string) bool { return host == "example.com:443" },
 		},
 	})
@@ -480,7 +493,7 @@ func TestShouldInspectCONNECT(t *testing.T) {
 	p, err := New(Config{
 		Addr: "127.0.0.1:8080",
 		HTTPSInspection: &HTTPSInspectionConfig{
-			CA:        &CA{},
+			CA:        testCA(t),
 			Intercept: MatchHosts("example.com"),
 		},
 	})
@@ -504,7 +517,7 @@ func TestShouldInspectCONNECT_ReturnsFalseWhenDisabled(t *testing.T) {
 	}
 }
 
-func TestInspectCONNECT_FallsBackToTunnelWhenPassthroughEnabled(t *testing.T) {
+func TestCONNECT_UnmatchedInspectionHostUsesTunnel(t *testing.T) {
 	upstreamListener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("net.Listen() error = %v", err)
@@ -537,9 +550,8 @@ func TestInspectCONNECT_FallsBackToTunnelWhenPassthroughEnabled(t *testing.T) {
 	p, err := New(Config{
 		Addr: proxyAddr,
 		HTTPSInspection: &HTTPSInspectionConfig{
-			CA:                 &CA{},
-			Intercept:          MatchAllHosts(),
-			PassthroughOnError: true,
+			CA:        testCA(t),
+			Intercept: MatchHosts("does-not-match.example"),
 		},
 	})
 	if err != nil {
@@ -600,6 +612,110 @@ func TestInspectCONNECT_FallsBackToTunnelWhenPassthroughEnabled(t *testing.T) {
 
 	if err := <-upstreamErrCh; err != nil {
 		t.Fatalf("upstream error = %v", err)
+	}
+
+	stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := p.Shutdown(stopCtx); err != nil {
+		t.Fatalf("Shutdown() error = %v", err)
+	}
+	if err := <-startErrCh; err != nil {
+		t.Fatalf("Start() returned error = %v", err)
+	}
+}
+
+func TestInspectCONNECT_TransformsHTTPSResponseBody(t *testing.T) {
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("hello"))
+	}))
+	defer upstream.Close()
+
+	upstreamURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatalf("url.Parse() error = %v", err)
+	}
+
+	ca := testCA(t)
+	proxyAddr := freeAddr(t)
+	p, err := New(Config{
+		Addr: proxyAddr,
+		HTTPSInspection: &HTTPSInspectionConfig{
+			CA:        ca,
+			Intercept: MatchHosts(upstreamURL.Hostname()),
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	p.transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	mustUse(t, p, TransformResponseBody(func(body []byte) ([]byte, error) {
+		return bytes.ToUpper(body), nil
+	}))
+
+	startErrCh := make(chan error, 1)
+	go func() {
+		startErrCh <- p.Start()
+	}()
+	waitForTCP(t, proxyAddr)
+
+	clientConn, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("net.Dial() proxy error = %v", err)
+	}
+	defer clientConn.Close()
+	if err := clientConn.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("SetDeadline() error = %v", err)
+	}
+
+	connectReq := "CONNECT " + upstreamURL.Host + " HTTP/1.1\r\nHost: " + upstreamURL.Host + "\r\n\r\n"
+	if _, err := clientConn.Write([]byte(connectReq)); err != nil {
+		t.Fatalf("write CONNECT request error = %v", err)
+	}
+
+	reader := bufio.NewReader(clientConn)
+	statusLine, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("read CONNECT status error = %v", err)
+	}
+	if !strings.Contains(statusLine, "200 Connection Established") {
+		t.Fatalf("CONNECT status line = %q, want 200 Connection Established", statusLine)
+	}
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatalf("read CONNECT header error = %v", err)
+		}
+		if line == "\r\n" {
+			break
+		}
+	}
+
+	roots := x509.NewCertPool()
+	roots.AddCert(ca.cert)
+	tlsConn := tls.Client(clientConn, &tls.Config{
+		ServerName: upstreamURL.Hostname(),
+		RootCAs:    roots,
+		NextProtos: []string{"http/1.1"},
+	})
+	if err := tlsConn.Handshake(); err != nil {
+		t.Fatalf("TLS handshake error = %v", err)
+	}
+
+	if _, err := tlsConn.Write([]byte("GET / HTTP/1.1\r\nHost: " + upstreamURL.Host + "\r\nConnection: close\r\n\r\n")); err != nil {
+		t.Fatalf("write HTTPS request error = %v", err)
+	}
+	resp, err := http.ReadResponse(bufio.NewReader(tlsConn), nil)
+	if err != nil {
+		t.Fatalf("ReadResponse() error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+	if string(body) != "HELLO" {
+		t.Fatalf("body = %q, want %q", string(body), "HELLO")
 	}
 
 	stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

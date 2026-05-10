@@ -18,6 +18,7 @@ type Proxy struct {
 	server        *http.Server
 	client        *http.Client
 	transport     *http.Transport
+	certCache     *certCache
 	logger        Logger
 	requestHooks  []RequestHook
 	responseHooks []ResponseHook
@@ -51,6 +52,11 @@ func New(config Config) (*Proxy, error) {
 		DisableCompression:    true,
 	}
 
+	var certCache *certCache
+	if config.HTTPSInspection != nil {
+		certCache = newCertCache(config.HTTPSInspection.CA, config.HTTPSInspection.CertificateTTL)
+	}
+
 	proxy := &Proxy{
 		config: config,
 		server: &http.Server{
@@ -60,6 +66,7 @@ func New(config Config) (*Proxy, error) {
 		},
 		client:    &http.Client{Transport: transport},
 		transport: transport,
+		certCache: certCache,
 		logger:    logger,
 		running:   false,
 	}
