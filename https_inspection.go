@@ -1,0 +1,41 @@
+package groxy
+
+// HostMatcher decides whether a host should be selected for HTTPS inspection.
+//
+// The host may include a port, such as "example.com:443". Matchers should
+// normalize hosts as needed before comparing them.
+type HostMatcher func(host string) bool
+
+// HTTPSInspectionConfig configures opt-in HTTPS inspection for CONNECT traffic.
+//
+// HTTPS inspection uses local TLS interception: Groxy terminates TLS from the
+// client with a certificate signed by CA, then opens its own TLS connection to
+// the upstream server. This allows normal request/response middleware and body
+// transforms to run on selected HTTPS traffic.
+//
+// If HTTPSInspectionConfig is nil, Groxy keeps the current safe default and
+// tunnels HTTPS traffic without inspecting encrypted request or response bodies.
+type HTTPSInspectionConfig struct {
+	// CA signs generated per-host certificates used for inspected HTTPS traffic.
+	CA *CA
+
+	// Intercept decides which CONNECT hosts should be inspected.
+	//
+	// This field is required when HTTPS inspection is enabled. Use MatchAllHosts
+	// in a future release if you explicitly want to inspect every host.
+	Intercept HostMatcher
+
+	// PassthroughOnError controls whether Groxy falls back to a normal CONNECT
+	// tunnel if HTTPS inspection setup fails.
+	//
+	// The default is false, so inspection failures fail closed instead of
+	// silently bypassing inspection policy.
+	PassthroughOnError bool
+}
+
+// CA is a certificate authority used to sign per-host certificates for HTTPS
+// inspection.
+//
+// CA generation and loading helpers will be added as part of the HTTPS
+// inspection implementation.
+type CA struct{}

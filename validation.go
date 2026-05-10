@@ -22,6 +22,25 @@ func validateConfig(config Config) error {
 		return fmt.Errorf("invalid config: max body size cannot be negative")
 	}
 
+	if err := validateHTTPSInspection(config.HTTPSInspection); err != nil {
+		return fmt.Errorf("invalid config: %w", err)
+	}
+
+	return nil
+}
+
+func validateHTTPSInspection(config *HTTPSInspectionConfig) error {
+	if config == nil {
+		return nil
+	}
+
+	if config.CA == nil {
+		return fmt.Errorf("HTTPS inspection CA is required")
+	}
+	if config.Intercept == nil {
+		return fmt.Errorf("HTTPS inspection intercept matcher is required")
+	}
+
 	return nil
 }
 

@@ -35,6 +35,13 @@ type Config struct {
 	//
 	// If nil, Groxy discards log messages.
 	Logger Logger
+
+	// HTTPSInspection enables opt-in HTTPS inspection using local TLS
+	// interception.
+	//
+	// If nil, HTTPS requests use normal CONNECT tunneling and encrypted bodies
+	// cannot be inspected or modified.
+	HTTPSInspection *HTTPSInspectionConfig
 }
 
 // Timeouts contains timeout settings for client, upstream, and idle proxy connections.

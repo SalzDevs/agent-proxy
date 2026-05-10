@@ -168,6 +168,52 @@ func TestNew_RejectsNegativeMaxBodySize(t *testing.T) {
 	}
 }
 
+func TestNew_RejectsHTTPSInspectionWithoutCA(t *testing.T) {
+	_, err := New(Config{
+		Addr: "127.0.0.1:8080",
+		HTTPSInspection: &HTTPSInspectionConfig{
+			Intercept: func(host string) bool { return true },
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for HTTPS inspection without CA, got nil")
+	}
+	if !strings.Contains(err.Error(), "CA is required") {
+		t.Fatalf("error = %q, want CA requirement", err.Error())
+	}
+}
+
+func TestNew_RejectsHTTPSInspectionWithoutInterceptMatcher(t *testing.T) {
+	_, err := New(Config{
+		Addr: "127.0.0.1:8080",
+		HTTPSInspection: &HTTPSInspectionConfig{
+			CA: &CA{},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for HTTPS inspection without intercept matcher, got nil")
+	}
+	if !strings.Contains(err.Error(), "intercept matcher is required") {
+		t.Fatalf("error = %q, want intercept matcher requirement", err.Error())
+	}
+}
+
+func TestNew_AcceptsHTTPSInspectionConfig(t *testing.T) {
+	p, err := New(Config{
+		Addr: "127.0.0.1:8080",
+		HTTPSInspection: &HTTPSInspectionConfig{
+			CA:        &CA{},
+			Intercept: func(host string) bool { return host == "example.com:443" },
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if p.config.HTTPSInspection == nil {
+		t.Fatal("expected HTTPS inspection config to be stored")
+	}
+}
+
 func TestNew_InitializesInternalFields(t *testing.T) {
 	cfg := Config{Addr: "127.0.0.1:8080"}
 
