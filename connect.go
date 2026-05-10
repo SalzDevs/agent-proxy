@@ -34,32 +34,76 @@ func (p *Proxy) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dialer := net.Dialer{Timeout: p.config.Timeouts.Dial}
-	upstreamConn, err := dialer.DialContext(r.Context(), "tcp", target)
+	if p.shouldInspectCONNECT(target) {
+		p.inspectCONNECT(w, r, target)
+		return
+	}
+
+	p.tunnelCONNECT(w, r, target)
+}
+
+func (p *Proxy) shouldInspectCONNECT(host string) bool {
+	inspection := p.config.HTTPSInspection
+	return inspection != nil && inspection.Intercept != nil && inspection.Intercept(host)
+}
+
+func (p *Proxy) tunnelCONNECT(w http.ResponseWriter, r *http.Request, target string) {
+	upstreamConn, err := p.dialCONNECTTarget(r, target)
 	if err != nil {
 		http.Error(w, "failed to connect to target", http.StatusBadGateway)
 		return
 	}
 	defer upstreamConn.Close()
 
-	hijacker, ok := w.(http.Hijacker)
-	if !ok {
-		http.Error(w, "hijacking not supported", http.StatusInternalServerError)
-		return
-	}
-
-	clientConn, _, err := hijacker.Hijack()
+	clientConn, err := hijackCONNECT(w)
 	if err != nil {
-		http.Error(w, "failed to hijack connection", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer clientConn.Close()
 
-	_, err = clientConn.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
-	if err != nil {
+	if err := writeCONNECTEstablished(clientConn); err != nil {
 		return
 	}
 
+	copyCONNECTTunnel(clientConn, upstreamConn)
+}
+
+func (p *Proxy) inspectCONNECT(w http.ResponseWriter, r *http.Request, target string) {
+	if p.config.HTTPSInspection != nil && p.config.HTTPSInspection.PassthroughOnError {
+		p.logger.Printf("HTTPS inspection for %s is not implemented yet; falling back to tunnel", target)
+		p.tunnelCONNECT(w, r, target)
+		return
+	}
+
+	http.Error(w, "HTTPS inspection is not implemented yet", http.StatusNotImplemented)
+}
+
+func (p *Proxy) dialCONNECTTarget(r *http.Request, target string) (net.Conn, error) {
+	dialer := net.Dialer{Timeout: p.config.Timeouts.Dial}
+	return dialer.DialContext(r.Context(), "tcp", target)
+}
+
+func hijackCONNECT(w http.ResponseWriter) (net.Conn, error) {
+	hijacker, ok := w.(http.Hijacker)
+	if !ok {
+		return nil, errHijackingNotSupported
+	}
+
+	clientConn, _, err := hijacker.Hijack()
+	if err != nil {
+		return nil, err
+	}
+
+	return clientConn, nil
+}
+
+func writeCONNECTEstablished(conn net.Conn) error {
+	_, err := conn.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
+	return err
+}
+
+func copyCONNECTTunnel(clientConn, upstreamConn net.Conn) {
 	done := make(chan struct{}, 2)
 
 	go func() {

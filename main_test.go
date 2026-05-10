@@ -476,6 +476,142 @@ func TestHandleConnect_TunnelsTCPData(t *testing.T) {
 	}
 }
 
+func TestShouldInspectCONNECT(t *testing.T) {
+	p, err := New(Config{
+		Addr: "127.0.0.1:8080",
+		HTTPSInspection: &HTTPSInspectionConfig{
+			CA:        &CA{},
+			Intercept: MatchHosts("example.com"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	if !p.shouldInspectCONNECT("example.com:443") {
+		t.Fatal("expected matching host to be inspected")
+	}
+	if p.shouldInspectCONNECT("other.example:443") {
+		t.Fatal("expected non-matching host not to be inspected")
+	}
+}
+
+func TestShouldInspectCONNECT_ReturnsFalseWhenDisabled(t *testing.T) {
+	p := newTestProxy(t)
+
+	if p.shouldInspectCONNECT("example.com:443") {
+		t.Fatal("expected CONNECT inspection to be disabled")
+	}
+}
+
+func TestInspectCONNECT_FallsBackToTunnelWhenPassthroughEnabled(t *testing.T) {
+	upstreamListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen() error = %v", err)
+	}
+	defer upstreamListener.Close()
+
+	upstreamErrCh := make(chan error, 1)
+	go func() {
+		conn, err := upstreamListener.Accept()
+		if err != nil {
+			upstreamErrCh <- err
+			return
+		}
+		defer conn.Close()
+
+		buf := make([]byte, len("ping"))
+		if _, err := io.ReadFull(conn, buf); err != nil {
+			upstreamErrCh <- err
+			return
+		}
+		if string(buf) != "ping" {
+			upstreamErrCh <- nil
+			return
+		}
+		_, err = conn.Write([]byte("pong"))
+		upstreamErrCh <- err
+	}()
+
+	proxyAddr := freeAddr(t)
+	p, err := New(Config{
+		Addr: proxyAddr,
+		HTTPSInspection: &HTTPSInspectionConfig{
+			CA:                 &CA{},
+			Intercept:          MatchAllHosts(),
+			PassthroughOnError: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	startErrCh := make(chan error, 1)
+	go func() {
+		startErrCh <- p.Start()
+	}()
+
+	waitForTCP(t, proxyAddr)
+
+	clientConn, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("net.Dial() proxy error = %v", err)
+	}
+	defer clientConn.Close()
+	if err := clientConn.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("SetDeadline() error = %v", err)
+	}
+
+	connectReq := "CONNECT " + upstreamListener.Addr().String() + " HTTP/1.1\r\nHost: " + upstreamListener.Addr().String() + "\r\n\r\n"
+	if _, err := clientConn.Write([]byte(connectReq)); err != nil {
+		t.Fatalf("write CONNECT request error = %v", err)
+	}
+
+	reader := bufio.NewReader(clientConn)
+	statusLine, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("read CONNECT status error = %v", err)
+	}
+	if !strings.Contains(statusLine, "200 Connection Established") {
+		t.Fatalf("CONNECT status line = %q, want 200 Connection Established", statusLine)
+	}
+
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatalf("read CONNECT header error = %v", err)
+		}
+		if line == "\r\n" {
+			break
+		}
+	}
+
+	if _, err := clientConn.Write([]byte("ping")); err != nil {
+		t.Fatalf("write tunnel payload error = %v", err)
+	}
+
+	buf := make([]byte, len("pong"))
+	if _, err := io.ReadFull(reader, buf); err != nil {
+		t.Fatalf("read tunnel payload error = %v", err)
+	}
+	if string(buf) != "pong" {
+		t.Fatalf("tunnel response = %q, want %q", string(buf), "pong")
+	}
+
+	if err := <-upstreamErrCh; err != nil {
+		t.Fatalf("upstream error = %v", err)
+	}
+
+	stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := p.Shutdown(stopCtx); err != nil {
+		t.Fatalf("Shutdown() error = %v", err)
+	}
+	if err := <-startErrCh; err != nil {
+		t.Fatalf("Start() returned error = %v", err)
+	}
+}
+
 func TestOnRequest_ModifiesUpstreamRequest(t *testing.T) {
 	seen := make(chan string, 1)
 
