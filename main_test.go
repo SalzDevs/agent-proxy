@@ -640,16 +640,8 @@ func TestCONNECT_UnmatchedInspectionHostUsesTunnel(t *testing.T) {
 	}
 }
 
-func TestInspectCONNECT_TransformsHTTPSResponseBody(t *testing.T) {
-	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("hello"))
-	}))
-	defer upstream.Close()
-
-	upstreamURL, err := url.Parse(upstream.URL)
-	if err != nil {
-		t.Fatalf("url.Parse() error = %v", err)
-	}
+func newHTTPSInspectionTestProxy(t *testing.T, upstreamHost string) (*Proxy, *CA, string) {
+	t.Helper()
 
 	ca := testCA(t)
 	proxyAddr := freeAddr(t)
@@ -657,16 +649,22 @@ func TestInspectCONNECT_TransformsHTTPSResponseBody(t *testing.T) {
 		Addr: proxyAddr,
 		HTTPSInspection: &HTTPSInspectionConfig{
 			CA:        ca,
-			Intercept: MatchHosts(upstreamURL.Hostname()),
+			Intercept: MatchHosts(upstreamHost),
 		},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
+
+	// Test upstream servers use self-signed certificates. This keeps the test
+	// focused on Groxy's client-side MITM certificate instead of upstream trust.
 	p.transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	mustUse(t, p, TransformResponseBody(func(body []byte) ([]byte, error) {
-		return bytes.ToUpper(body), nil
-	}))
+
+	return p, ca, proxyAddr
+}
+
+func startProxyForTest(t *testing.T, p *Proxy, proxyAddr string) chan error {
+	t.Helper()
 
 	startErrCh := make(chan error, 1)
 	go func() {
@@ -674,16 +672,34 @@ func TestInspectCONNECT_TransformsHTTPSResponseBody(t *testing.T) {
 	}()
 	waitForTCP(t, proxyAddr)
 
+	return startErrCh
+}
+
+func stopProxyForTest(t *testing.T, p *Proxy, startErrCh chan error) {
+	t.Helper()
+
+	stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := p.Shutdown(stopCtx); err != nil {
+		t.Fatalf("Shutdown() error = %v", err)
+	}
+	if err := <-startErrCh; err != nil {
+		t.Fatalf("Start() returned error = %v", err)
+	}
+}
+
+func inspectedHTTPSRequest(t *testing.T, proxyAddr, upstreamHost, serverName, path string, ca *CA) *http.Response {
+	t.Helper()
+
 	clientConn, err := net.Dial("tcp", proxyAddr)
 	if err != nil {
 		t.Fatalf("net.Dial() proxy error = %v", err)
 	}
-	defer clientConn.Close()
 	if err := clientConn.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
 		t.Fatalf("SetDeadline() error = %v", err)
 	}
 
-	connectReq := "CONNECT " + upstreamURL.Host + " HTTP/1.1\r\nHost: " + upstreamURL.Host + "\r\n\r\n"
+	connectReq := "CONNECT " + upstreamHost + " HTTP/1.1\r\nHost: " + upstreamHost + "\r\n\r\n"
 	if _, err := clientConn.Write([]byte(connectReq)); err != nil {
 		t.Fatalf("write CONNECT request error = %v", err)
 	}
@@ -709,7 +725,7 @@ func TestInspectCONNECT_TransformsHTTPSResponseBody(t *testing.T) {
 	roots := x509.NewCertPool()
 	roots.AddCert(ca.cert)
 	tlsConn := tls.Client(clientConn, &tls.Config{
-		ServerName: upstreamURL.Hostname(),
+		ServerName: serverName,
 		RootCAs:    roots,
 		NextProtos: []string{"http/1.1"},
 	})
@@ -717,13 +733,36 @@ func TestInspectCONNECT_TransformsHTTPSResponseBody(t *testing.T) {
 		t.Fatalf("TLS handshake error = %v", err)
 	}
 
-	if _, err := tlsConn.Write([]byte("GET / HTTP/1.1\r\nHost: " + upstreamURL.Host + "\r\nConnection: close\r\n\r\n")); err != nil {
+	if _, err := tlsConn.Write([]byte("GET " + path + " HTTP/1.1\r\nHost: " + upstreamHost + "\r\nConnection: close\r\n\r\n")); err != nil {
 		t.Fatalf("write HTTPS request error = %v", err)
 	}
+
 	resp, err := http.ReadResponse(bufio.NewReader(tlsConn), nil)
 	if err != nil {
 		t.Fatalf("ReadResponse() error = %v", err)
 	}
+
+	return resp
+}
+
+func TestInspectCONNECT_TransformsHTTPSResponseBody(t *testing.T) {
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("hello"))
+	}))
+	defer upstream.Close()
+
+	upstreamURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatalf("url.Parse() error = %v", err)
+	}
+
+	p, ca, proxyAddr := newHTTPSInspectionTestProxy(t, upstreamURL.Hostname())
+	mustUse(t, p, TransformResponseBody(func(body []byte) ([]byte, error) {
+		return bytes.ToUpper(body), nil
+	}))
+
+	startErrCh := startProxyForTest(t, p, proxyAddr)
+	resp := inspectedHTTPSRequest(t, proxyAddr, upstreamURL.Host, upstreamURL.Hostname(), "/", ca)
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
@@ -734,14 +773,94 @@ func TestInspectCONNECT_TransformsHTTPSResponseBody(t *testing.T) {
 		t.Fatalf("body = %q, want %q", string(body), "HELLO")
 	}
 
-	stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	if err := p.Shutdown(stopCtx); err != nil {
-		t.Fatalf("Shutdown() error = %v", err)
+	stopProxyForTest(t, p, startErrCh)
+}
+
+func TestInspectCONNECT_RunsHTTPSRequestHook(t *testing.T) {
+	seen := make(chan string, 1)
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen <- r.Header.Get("X-Groxy-HTTPS")
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer upstream.Close()
+
+	upstreamURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatalf("url.Parse() error = %v", err)
 	}
-	if err := <-startErrCh; err != nil {
-		t.Fatalf("Start() returned error = %v", err)
+
+	p, ca, proxyAddr := newHTTPSInspectionTestProxy(t, upstreamURL.Hostname())
+	mustOnRequest(t, p, func(ctx *RequestContext) error {
+		ctx.Request.Header.Set("X-Groxy-HTTPS", "true")
+		return nil
+	})
+
+	startErrCh := startProxyForTest(t, p, proxyAddr)
+	resp := inspectedHTTPSRequest(t, proxyAddr, upstreamURL.Host, upstreamURL.Hostname(), "/", ca)
+	_ = resp.Body.Close()
+
+	if got := <-seen; got != "true" {
+		t.Fatalf("upstream X-Groxy-HTTPS = %q, want %q", got, "true")
 	}
+	stopProxyForTest(t, p, startErrCh)
+}
+
+func TestInspectCONNECT_RunsHTTPSResponseHook(t *testing.T) {
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer upstream.Close()
+
+	upstreamURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatalf("url.Parse() error = %v", err)
+	}
+
+	p, ca, proxyAddr := newHTTPSInspectionTestProxy(t, upstreamURL.Hostname())
+	mustOnResponse(t, p, func(ctx *ResponseContext) error {
+		ctx.Response.Header.Set("X-Groxy-Response", "true")
+		return nil
+	})
+
+	startErrCh := startProxyForTest(t, p, proxyAddr)
+	resp := inspectedHTTPSRequest(t, proxyAddr, upstreamURL.Host, upstreamURL.Hostname(), "/", ca)
+	defer resp.Body.Close()
+
+	if got := resp.Header.Get("X-Groxy-Response"); got != "true" {
+		t.Fatalf("response X-Groxy-Response = %q, want %q", got, "true")
+	}
+	stopProxyForTest(t, p, startErrCh)
+}
+
+func TestInspectCONNECT_BlockHostCanBlockHTTPS(t *testing.T) {
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("upstream should not be called")
+	}))
+	defer upstream.Close()
+
+	upstreamURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatalf("url.Parse() error = %v", err)
+	}
+
+	p, ca, proxyAddr := newHTTPSInspectionTestProxy(t, upstreamURL.Hostname())
+	mustUse(t, p, BlockHost(upstreamURL.Hostname(), http.StatusForbidden, "blocked https"))
+
+	startErrCh := startProxyForTest(t, p, proxyAddr)
+	resp := inspectedHTTPSRequest(t, proxyAddr, upstreamURL.Host, upstreamURL.Hostname(), "/", ca)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusForbidden)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+	if !strings.Contains(string(body), "blocked https") {
+		t.Fatalf("body = %q, want block message", string(body))
+	}
+	stopProxyForTest(t, p, startErrCh)
 }
 
 func TestOnRequest_ModifiesUpstreamRequest(t *testing.T) {
