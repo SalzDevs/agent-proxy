@@ -23,6 +23,25 @@ Good contribution areas include:
 Please do not report security vulnerabilities in public issues. See
 [`SECURITY.md`](SECURITY.md) instead.
 
+## Project layout
+
+```text
+.
+├── *.go                 # public groxy package
+├── cmd/groxy            # small demo proxy binary
+├── docs                 # guides and security/operational notes
+├── examples             # runnable examples
+├── .github              # CI, issue templates, PR template
+├── README.md            # landing page / quickstart
+├── CHANGELOG.md         # release history
+├── ROADMAP.md           # planned work
+└── RELEASE.md           # maintainer release checklist
+```
+
+The root Go files intentionally belong to one public package:
+`github.com/SalzDevs/groxy`. Avoid splitting code into subpackages unless there
+is a clear API or maintenance reason.
+
 ## Development setup
 
 Requirements:

@@ -6,11 +6,30 @@ Groxy is currently pre-v1, so minor releases may include API changes.
 
 ## [Unreleased]
 
+### Added
+
+- Documentation index in `docs/README.md`.
+- HTTPS inspection guide and threat model.
+- Examples index in `examples/README.md`.
+
+### Changed
+
+- README now stays shorter and links to deeper guides for advanced topics.
+
 ### Planned
 
 - Observability and access logging helpers
 - Proxy authentication helpers
 - Additional HTTPS inspection controls and docs
+
+## [v0.3.1] - 2026-05-11
+
+### Added
+
+- Quickstart section: "Try it in 60 seconds".
+- Forward proxy guide in `docs/building-forward-proxy.md`.
+- CA trust instructions for HTTPS inspection.
+- Open source project hygiene files, issue templates, and PR template.
 
 ## [v0.3.0] - 2026-05-10
 

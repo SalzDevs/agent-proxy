@@ -24,7 +24,7 @@ type HTTPSInspectionConfig struct {
 	// Intercept decides which CONNECT hosts should be inspected.
 	//
 	// This field is required when HTTPS inspection is enabled. Use MatchAllHosts
-	// in a future release if you explicitly want to inspect every host.
+	// only if you explicitly want to inspect every host.
 	Intercept HostMatcher
 
 	// CertificateTTL controls how long generated per-host certificates are valid.

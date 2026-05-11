@@ -183,8 +183,8 @@ be inspected or transformed when HTTPS inspection is explicitly enabled.
 ## HTTPS inspection
 
 Groxy can inspect selected HTTPS traffic using local TLS interception/MITM. This
-is **opt-in only**. Without this config, HTTPS traffic is tunneled normally and
-Groxy cannot read encrypted request or response bodies.
+is **opt-in only**. Without HTTPS inspection config, Groxy tunnels HTTPS normally
+and cannot read encrypted request or response bodies.
 
 > Only inspect traffic you own or are authorized to inspect. Users must install
 > and trust your Groxy CA certificate in their browser or operating system.
@@ -192,16 +192,7 @@ Groxy cannot read encrypted request or response bodies.
 ```go
 ca, err := groxy.LoadCAFiles("groxy-ca.pem", "groxy-ca-key.pem")
 if err != nil {
-	ca, err = groxy.NewCA(groxy.CAConfig{
-		CommonName: "Groxy Local CA",
-		ValidFor:  365 * 24 * time.Hour,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := ca.WriteFiles("groxy-ca.pem", "groxy-ca-key.pem"); err != nil {
-		log.Fatal(err)
-	}
+	log.Fatal(err)
 }
 
 proxy, err := groxy.New(groxy.Config{
@@ -213,57 +204,14 @@ proxy, err := groxy.New(groxy.Config{
 })
 ```
 
-### Trusting the Groxy CA
+After enabling inspection, normal middleware works on matched HTTPS traffic.
+Use `MatchHosts` for narrow allowlists and `MatchAllHosts` only when you
+explicitly want broad inspection.
 
-`CA.WriteFiles("groxy-ca.pem", "groxy-ca-key.pem")` writes the public CA
-certificate and private key separately. Install only `groxy-ca.pem` on client
-devices; keep `groxy-ca-key.pem` private.
+Detailed docs:
 
-Common trust-store setup:
-
-- **Firefox:** Settings → Privacy & Security → Certificates → View
-  Certificates → Authorities → Import, select `groxy-ca.pem`, then enable trust
-  for websites.
-- **Chrome/Chromium:** Chrome uses the operating system trust store on macOS and
-  Windows. On Linux, import the CA into the NSS database used by Chromium-based
-  browsers, for example with `certutil -A -d sql:$HOME/.pki/nssdb -n "Groxy Local
-  CA" -t "C,," -i groxy-ca.pem`.
-- **macOS:** Open Keychain Access, import `groxy-ca.pem` into the System or login
-  keychain, open the certificate, and set Trust → Secure Sockets Layer (SSL) to
-  Always Trust.
-- **Windows:** Run `certmgr.msc` or Manage User Certificates, then import
-  `groxy-ca.pem` into Trusted Root Certification Authorities → Certificates.
-- **Linux system trust:** Copy `groxy-ca.pem` to the distribution's local CA
-  directory and refresh trust, for example
-  `/usr/local/share/ca-certificates/groxy-ca.crt` with `update-ca-certificates`
-  on Debian/Ubuntu, or `/etc/pki/ca-trust/source/anchors/groxy-ca.pem` with
-  `update-ca-trust` on Fedora/RHEL.
-
-Restart the browser or application after importing the certificate. Remove the
-CA from the trust store when you no longer need HTTPS inspection.
-
-After enabling inspection, normal middleware works on matched HTTPS traffic:
-
-```go
-if err := proxy.Use(groxy.TransformResponseBody(func(body []byte) ([]byte, error) {
-	return bytes.ReplaceAll(body, []byte("Example Domain"), []byte("Groxy Domain")), nil
-})); err != nil {
-	log.Fatal(err)
-}
-```
-
-Host matching helpers:
-
-```go
-groxy.MatchHosts("example.com", "*.example.org")
-groxy.MatchAllHosts() // explicitly inspect every CONNECT host
-```
-
-Current HTTPS inspection limitations:
-
-- intercepted client traffic is HTTP/1.1 over TLS
-- users must trust the generated CA manually
-- generated per-host certificates are kept in memory and renewed before expiry
+- [HTTPS inspection guide](docs/https-inspection.md)
+- [HTTPS inspection threat model](docs/https-inspection-threat-model.md)
 
 ## Timeouts
 
@@ -302,16 +250,11 @@ proxy, err := groxy.New(groxy.Config{
 
 ## Examples and guides
 
-Examples:
-
-- [`examples/basic`](examples/basic)
-- [`examples/middleware`](examples/middleware)
-- [`examples/body-transform`](examples/body-transform)
-- [`examples/https-inspection`](examples/https-inspection)
-
-Guides:
-
+- [Documentation index](docs/README.md)
+- [Runnable examples](examples/README.md)
 - [Building a forward proxy in Go with Groxy](docs/building-forward-proxy.md)
+- [HTTPS inspection guide](docs/https-inspection.md)
+- [HTTPS inspection threat model](docs/https-inspection-threat-model.md)
 
 ## Roadmap
 

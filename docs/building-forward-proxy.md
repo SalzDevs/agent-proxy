@@ -180,9 +180,13 @@ Install only `groxy-ca.pem` into the client trust store. Keep
 
 After that, normal request/response middleware runs on matched HTTPS traffic.
 
+For full CA trust setup, host matching notes, passthrough behavior, and safety
+assumptions, read the [HTTPS inspection guide](https-inspection.md) and
+[HTTPS inspection threat model](https-inspection-threat-model.md).
+
 ## Complete examples
 
-See the repository examples for runnable programs:
+See [the examples index](../examples/README.md) for runnable programs:
 
 - [`examples/basic`](../examples/basic)
 - [`examples/middleware`](../examples/middleware)
