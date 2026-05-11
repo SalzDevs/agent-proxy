@@ -27,6 +27,27 @@ It supports:
 go get github.com/SalzDevs/groxy
 ```
 
+## Try it in 60 seconds
+
+Run the demo proxy:
+
+```bash
+git clone https://github.com/SalzDevs/groxy.git
+cd groxy
+go run ./cmd/groxy
+```
+
+In another terminal, send HTTP and HTTPS requests through it:
+
+```bash
+curl -x http://127.0.0.1:8080 http://example.com
+curl -x http://127.0.0.1:8080 https://example.com
+```
+
+You should see requests pass through the local proxy. By default, HTTPS uses
+normal CONNECT tunneling, so encrypted HTTPS bodies are not inspected unless you
+explicitly enable HTTPS inspection.
+
 ## Basic usage
 
 ```go
@@ -279,14 +300,18 @@ proxy, err := groxy.New(groxy.Config{
 })
 ```
 
-## Examples
+## Examples and guides
 
-See:
+Examples:
 
 - [`examples/basic`](examples/basic)
 - [`examples/middleware`](examples/middleware)
 - [`examples/body-transform`](examples/body-transform)
 - [`examples/https-inspection`](examples/https-inspection)
+
+Guides:
+
+- [Building a forward proxy in Go with Groxy](docs/building-forward-proxy.md)
 
 ## Roadmap
 
