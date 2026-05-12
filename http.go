@@ -77,8 +77,13 @@ func (p *Proxy) forwardRequest(r *http.Request, scheme, host string) (resp *http
 		if _, ok := blockError(err); ok {
 			return nil, err
 		}
+		if _, ok := proxyAuthRequired(err); ok {
+			return nil, err
+		}
 		return nil, forwardError{status: http.StatusInternalServerError, message: "request hook failed", err: err}
 	}
+
+	removeHopByHopHeaders(outReq.Header)
 
 	resp, err = p.client.Do(outReq)
 	if err != nil {
@@ -109,13 +114,17 @@ func newForwardRequest(r *http.Request, scheme, host string) (*http.Request, err
 	}
 
 	outReq.Header = r.Header.Clone()
-	removeHopByHopHeaders(outReq.Header)
 	outReq.Host = host
 
 	return outReq, nil
 }
 
 func (p *Proxy) writeForwardError(w http.ResponseWriter, err error) {
+	if auth, ok := proxyAuthRequired(err); ok {
+		writeProxyAuthRequired(w, auth.realm)
+		return
+	}
+
 	if block, ok := blockError(err); ok {
 		writeBlock(w, block)
 		return

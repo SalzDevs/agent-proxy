@@ -28,6 +28,7 @@ func TestPublicAPI_UseMiddleware(t *testing.T) {
 
 	if err := proxy.Use(
 		groxy.AccessLog(nil),
+		groxy.ProxyBasicAuth("user", "pass"),
 		groxy.AddRequestHeader("X-Groxy-Request", "true"),
 		groxy.AddResponseHeader("X-Groxy-Response", "true"),
 		groxy.TransformResponseBody(func(body []byte) ([]byte, error) {
@@ -38,6 +39,7 @@ func TestPublicAPI_UseMiddleware(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, upstream.URL, nil)
+	req.Header.Set("Proxy-Authorization", "Basic dXNlcjpwYXNz")
 	rec := httptest.NewRecorder()
 
 	proxy.ServeHTTP(rec, req)

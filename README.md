@@ -19,6 +19,7 @@ It supports:
 - header helpers
 - request/response body transforms
 - access log middleware
+- basic proxy authentication
 - configurable timeouts
 - configurable logging
 
@@ -145,6 +146,21 @@ if err := proxy.Use(
 	log.Fatal(err)
 }
 ```
+
+## Proxy authentication
+
+Use `ProxyBasicAuth` to require HTTP Basic proxy authentication for normal HTTP
+proxy requests:
+
+```go
+if err := proxy.Use(groxy.ProxyBasicAuth("admin", os.Getenv("PROXY_PASSWORD"))); err != nil {
+	log.Fatal(err)
+}
+```
+
+Basic authentication is not encrypted by itself. Use it only when the
+client-to-proxy connection is protected or trusted, such as localhost, a private
+network, VPN, SSH tunnel, or TLS-terminating wrapper.
 
 ## Body transforms
 
