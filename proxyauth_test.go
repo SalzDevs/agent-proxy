@@ -34,6 +34,12 @@ func TestProxyBasicAuth_Name(t *testing.T) {
 	}
 }
 
+func TestProxyBasicAuth_HasConnectHook(t *testing.T) {
+	if ProxyBasicAuth("user", "pass").connectHook == nil {
+		t.Fatal("connectHook is nil, want CONNECT authentication")
+	}
+}
+
 func TestProxyBasicAuth_HookAllowsValidCredentials(t *testing.T) {
 	middleware := ProxyBasicAuth("user", "pass")
 	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
@@ -41,6 +47,16 @@ func TestProxyBasicAuth_HookAllowsValidCredentials(t *testing.T) {
 
 	if err := middleware.requestHook(&RequestContext{Request: req}); err != nil {
 		t.Fatalf("requestHook() error = %v", err)
+	}
+}
+
+func TestProxyBasicAuth_ConnectHookAllowsValidCredentials(t *testing.T) {
+	middleware := ProxyBasicAuth("user", "pass")
+	req := httptest.NewRequest(http.MethodConnect, "//example.com:443", nil)
+	req.Header.Set("Proxy-Authorization", "Basic dXNlcjpwYXNz")
+
+	if err := middleware.connectHook(&ConnectContext{Host: "example.com:443", Request: req}); err != nil {
+		t.Fatalf("connectHook() error = %v", err)
 	}
 }
 
@@ -80,6 +96,38 @@ func TestProxyBasicAuth_RejectsMalformedHTTP(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
 	req.Header.Set("Proxy-Authorization", "Basic not-base64")
+	rec := httptest.NewRecorder()
+	proxy.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusProxyAuthRequired {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusProxyAuthRequired)
+	}
+}
+
+func TestProxyBasicAuth_RejectsMissingCONNECT(t *testing.T) {
+	proxy := newTestProxy(t)
+	mustUse(t, proxy, ProxyBasicAuth("user", "pass"))
+
+	req := httptest.NewRequest(http.MethodConnect, "//example.com:443", nil)
+	req.Host = "example.com:443"
+	rec := httptest.NewRecorder()
+	proxy.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusProxyAuthRequired {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusProxyAuthRequired)
+	}
+	if got := rec.Header().Get("Proxy-Authenticate"); got != `Basic realm="Groxy"` {
+		t.Fatalf("Proxy-Authenticate = %q, want default challenge", got)
+	}
+}
+
+func TestProxyBasicAuth_RejectsInvalidCONNECT(t *testing.T) {
+	proxy := newTestProxy(t)
+	mustUse(t, proxy, ProxyBasicAuth("user", "pass"))
+
+	req := httptest.NewRequest(http.MethodConnect, "//example.com:443", nil)
+	req.Host = "example.com:443"
+	req.Header.Set("Proxy-Authorization", "Basic dXNlcjp3cm9uZw==")
 	rec := httptest.NewRecorder()
 	proxy.ServeHTTP(rec, req)
 
@@ -139,6 +187,44 @@ func TestProxyBasicAuthFunc_NilValidatorRejectsHTTP(t *testing.T) {
 	mustUse(t, proxy, ProxyBasicAuthFunc(nil))
 
 	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req.Header.Set("Proxy-Authorization", "Basic dXNlcjpwYXNz")
+	rec := httptest.NewRecorder()
+	proxy.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusProxyAuthRequired {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusProxyAuthRequired)
+	}
+}
+
+func TestProxyBasicAuthFunc_AllowsValidCONNECT(t *testing.T) {
+	var gotUsername, gotPassword string
+	proxy := newTestProxy(t)
+	mustUse(t, proxy, ProxyBasicAuthFunc(func(username, password string) bool {
+		gotUsername = username
+		gotPassword = password
+		return username == "user" && password == "pass"
+	}))
+
+	req := httptest.NewRequest(http.MethodConnect, "//example.com:443", nil)
+	req.Header.Set("Proxy-Authorization", "Basic dXNlcjpwYXNz")
+
+	if err := proxy.runConnectHooks("example.com:443", req); err != nil {
+		t.Fatalf("runConnectHooks() error = %v", err)
+	}
+	if gotUsername != "user" {
+		t.Fatalf("validator username = %q, want %q", gotUsername, "user")
+	}
+	if gotPassword != "pass" {
+		t.Fatalf("validator password = %q, want %q", gotPassword, "pass")
+	}
+}
+
+func TestProxyBasicAuthFunc_NilValidatorRejectsCONNECT(t *testing.T) {
+	proxy := newTestProxy(t)
+	mustUse(t, proxy, ProxyBasicAuthFunc(nil))
+
+	req := httptest.NewRequest(http.MethodConnect, "//example.com:443", nil)
+	req.Host = "example.com:443"
 	req.Header.Set("Proxy-Authorization", "Basic dXNlcjpwYXNz")
 	rec := httptest.NewRecorder()
 	proxy.ServeHTTP(rec, req)

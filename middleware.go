@@ -33,7 +33,11 @@ type ResponseContext struct {
 
 // ConnectContext contains data available to CONNECT hooks.
 type ConnectContext struct {
+	// Host is the CONNECT target host, usually in "host:port" form.
 	Host string
+
+	// Request is the original CONNECT request.
+	Request *http.Request
 }
 
 type forwardCompleteContext struct {

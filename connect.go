@@ -9,8 +9,8 @@ import (
 	"strings"
 )
 
-func (p *Proxy) runConnectHooks(host string) error {
-	ctx := &ConnectContext{Host: host}
+func (p *Proxy) runConnectHooks(host string, r *http.Request) error {
+	ctx := &ConnectContext{Host: host, Request: r}
 	for _, hook := range p.connectHooks {
 		if err := hook(ctx); err != nil {
 			return err
@@ -27,7 +27,12 @@ func (p *Proxy) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := p.runConnectHooks(target); err != nil {
+	if err := p.runConnectHooks(target, r); err != nil {
+		if auth, ok := proxyAuthRequired(err); ok {
+			writeProxyAuthRequired(w, auth.realm)
+			return
+		}
+
 		if block, ok := blockError(err); ok {
 			writeBlock(w, block)
 			return

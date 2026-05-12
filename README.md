@@ -150,7 +150,7 @@ if err := proxy.Use(
 ## Proxy authentication
 
 Use `ProxyBasicAuth` to require HTTP Basic proxy authentication for normal HTTP
-proxy requests:
+proxy requests and CONNECT tunnels:
 
 ```go
 if err := proxy.Use(groxy.ProxyBasicAuth("admin", os.Getenv("PROXY_PASSWORD"))); err != nil {

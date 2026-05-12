@@ -7,7 +7,8 @@ import (
 )
 
 // ProxyBasicAuth returns middleware that requires HTTP Basic proxy
-// authentication with a static username and password.
+// authentication with a static username and password for HTTP requests and
+// CONNECT tunnels.
 //
 // The credentials are read from the Proxy-Authorization header. Static
 // credentials are compared in constant time. Basic authentication is not
@@ -28,7 +29,8 @@ func ProxyBasicAuth(username, password string) Middleware {
 }
 
 // ProxyBasicAuthFunc returns middleware that requires HTTP Basic proxy
-// authentication using validate to check username and password pairs.
+// authentication for HTTP requests and CONNECT tunnels using validate to check
+// username and password pairs.
 //
 // The credentials are read from the Proxy-Authorization header. If validate is
 // nil or returns false, Groxy rejects the request with 407 Proxy Authentication
@@ -40,7 +42,7 @@ func ProxyBasicAuthFunc(validate func(username, password string) bool) Middlewar
 
 func proxyBasicAuthMiddleware(name, realm string, validate func(username, password string) bool) Middleware {
 	auth := &proxyBasicAuthenticator{realm: realm, validate: validate}
-	return Middleware{name: name, requestHook: auth.onRequest}
+	return Middleware{name: name, requestHook: auth.onRequest, connectHook: auth.onConnect}
 }
 
 type proxyBasicAuthenticator struct {
@@ -49,7 +51,15 @@ type proxyBasicAuthenticator struct {
 }
 
 func (auth *proxyBasicAuthenticator) onRequest(ctx *RequestContext) error {
-	username, password, ok := parseProxyBasicAuth(ctx.Request.Header.Get("Proxy-Authorization"))
+	return auth.authenticate(ctx.Request.Header.Get("Proxy-Authorization"))
+}
+
+func (auth *proxyBasicAuthenticator) onConnect(ctx *ConnectContext) error {
+	return auth.authenticate(ctx.Request.Header.Get("Proxy-Authorization"))
+}
+
+func (auth *proxyBasicAuthenticator) authenticate(header string) error {
+	username, password, ok := parseProxyBasicAuth(header)
 	if !ok || auth.validate == nil || !auth.validate(username, password) {
 		return &proxyAuthRequiredError{realm: auth.realm}
 	}

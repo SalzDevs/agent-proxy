@@ -58,6 +58,32 @@ func TestPublicAPI_UseMiddleware(t *testing.T) {
 	}
 }
 
+func TestPublicAPI_ConnectContextIncludesRequest(t *testing.T) {
+	proxy, err := groxy.New(groxy.Config{Addr: "127.0.0.1:8080"})
+	if err != nil {
+		t.Fatalf("groxy.New() error = %v", err)
+	}
+
+	var sawRequest bool
+	if err := proxy.OnConnect(func(ctx *groxy.ConnectContext) error {
+		sawRequest = ctx.Request != nil && ctx.Request.Header.Get("X-Test") == "true"
+		return groxy.Block(http.StatusForbidden, "stop")
+	}); err != nil {
+		t.Fatalf("proxy.OnConnect() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodConnect, "//example.com:443", nil)
+	req.Host = "example.com:443"
+	req.Header.Set("X-Test", "true")
+	rec := httptest.NewRecorder()
+
+	proxy.ServeHTTP(rec, req)
+
+	if !sawRequest {
+		t.Fatal("ConnectContext.Request was not available to hook")
+	}
+}
+
 func TestPublicAPI_ProxyBasicAuthFunc(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
