@@ -216,25 +216,36 @@ Detailed docs:
 
 ## Timeouts
 
-If no timeouts are provided, Groxy uses safe defaults.
+Groxy separates timeout behavior by direction:
 
-```go
-proxy, err := groxy.New(groxy.Config{
-	Addr: "127.0.0.1:8080",
-})
-```
+- **client → proxy**: clients sending requests to Groxy
+- **proxy → upstream**: Groxy connecting to destination servers
 
-You can override only the values you care about:
+If no timeouts are provided, Groxy uses safe defaults. If `Timeouts` is provided,
+zero-valued fields use their defaults; zero does **not** disable a timeout.
+Negative durations are rejected.
 
 ```go
 timeouts := groxy.DefaultTimeouts()
-timeouts.Dial = 2 * time.Second
+timeouts.Dial = 2 * time.Second // proxy → upstream TCP connect timeout
 
 proxy, err := groxy.New(groxy.Config{
 	Addr:     "127.0.0.1:8080",
 	Timeouts: &timeouts,
 })
 ```
+
+Common fields:
+
+| Field | Direction | Meaning |
+| --- | --- | --- |
+| `Dial` | proxy → upstream | TCP connect timeout for HTTP forwarding and CONNECT targets |
+| `TLSHandshake` | proxy → upstream | TLS handshake timeout for Groxy's outbound HTTPS client |
+| `ResponseHeader` | proxy → upstream | time waiting for upstream response headers |
+| `ReadHeader` | client → proxy | time for clients to send request headers to Groxy's built-in server |
+| `Idle` | client → proxy | idle client connection timeout on Groxy's built-in server |
+
+See [timeout semantics](docs/timeouts.md) for the full breakdown.
 
 ## Logging
 
@@ -264,6 +275,7 @@ if err := proxy.Use(groxy.AccessLog(logger)); err != nil {
 - [Runnable examples](examples/README.md)
 - [`examples/access-log`](examples/access-log)
 - [Building a forward proxy in Go with Groxy](docs/building-forward-proxy.md)
+- [Timeout semantics](docs/timeouts.md)
 - [HTTPS inspection guide](docs/https-inspection.md)
 - [HTTPS inspection threat model](docs/https-inspection-threat-model.md)
 

@@ -8,7 +8,20 @@ Groxy is currently pre-v1, so minor releases may include API changes.
 
 ### Added
 
+- Timeout semantics guide documenting client-to-proxy and proxy-to-upstream behavior.
+
+### Planned
+
+- Additional observability helpers
+- Proxy authentication helpers
+- Additional HTTPS inspection controls and docs
+
+## [v0.4.0] - 2026-05-12
+
+### Added
+
 - `AccessLog` middleware for one-line HTTP and CONNECT traffic logs.
+- Access log example in `examples/access-log`.
 - Documentation index in `docs/README.md`.
 - HTTPS inspection guide and threat model.
 - Examples index in `examples/README.md`.
@@ -16,12 +29,6 @@ Groxy is currently pre-v1, so minor releases may include API changes.
 ### Changed
 
 - README now stays shorter and links to deeper guides for advanced topics.
-
-### Planned
-
-- Additional observability helpers
-- Proxy authentication helpers
-- Additional HTTPS inspection controls and docs
 
 ## [v0.3.1] - 2026-05-11
 

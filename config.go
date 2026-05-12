@@ -44,24 +44,31 @@ type Config struct {
 	HTTPSInspection *HTTPSInspectionConfig
 }
 
-// Timeouts contains timeout settings for client, upstream, and idle proxy connections.
+// Timeouts contains timeout settings for client-to-proxy and proxy-to-upstream connections.
 type Timeouts struct {
-	// Dial is the maximum time allowed to connect to an upstream server.
+	// Dial is the maximum time Groxy may spend establishing an outbound TCP
+	// connection to an upstream server. It applies to normal HTTP forwarding and
+	// CONNECT target dialing.
 	Dial time.Duration
 
-	// TLSHandshake is the maximum time allowed for TLS handshakes made by the proxy HTTP client.
+	// TLSHandshake is the maximum time Groxy's outbound HTTP client may spend
+	// completing a TLS handshake with an upstream server.
 	TLSHandshake time.Duration
 
-	// ResponseHeader is the maximum time allowed to wait for upstream response headers.
+	// ResponseHeader is the maximum time Groxy may wait for upstream response
+	// headers after sending a request upstream.
 	ResponseHeader time.Duration
 
-	// IdleConn is the maximum time an unused upstream keep-alive connection stays open.
+	// IdleConn is the maximum time an unused upstream keep-alive connection stays
+	// open in Groxy's HTTP transport.
 	IdleConn time.Duration
 
-	// ReadHeader is the maximum time allowed for a client to send request headers to the proxy.
+	// ReadHeader is the maximum time a client may spend sending request headers
+	// to Groxy's built-in server.
 	ReadHeader time.Duration
 
-	// Idle is the maximum time an idle client connection to the proxy stays open.
+	// Idle is the maximum time an idle client connection to Groxy's built-in
+	// server stays open.
 	Idle time.Duration
 }
 
