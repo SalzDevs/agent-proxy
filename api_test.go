@@ -27,6 +27,7 @@ func TestPublicAPI_UseMiddleware(t *testing.T) {
 	}
 
 	if err := proxy.Use(
+		groxy.AccessLog(nil),
 		groxy.AddRequestHeader("X-Groxy-Request", "true"),
 		groxy.AddResponseHeader("X-Groxy-Response", "true"),
 		groxy.TransformResponseBody(func(body []byte) ([]byte, error) {

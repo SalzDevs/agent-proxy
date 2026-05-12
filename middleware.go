@@ -14,6 +14,8 @@ type ResponseHook func(*ResponseContext) error
 // ConnectHook is called before a CONNECT tunnel is opened.
 type ConnectHook func(*ConnectContext) error
 
+type forwardCompleteHook func(*forwardCompleteContext)
+
 // RequestContext contains data available to request hooks.
 type RequestContext struct {
 	Request *http.Request
@@ -34,12 +36,19 @@ type ConnectContext struct {
 	Host string
 }
 
+type forwardCompleteContext struct {
+	Request  *http.Request
+	Response *http.Response
+	Err      error
+}
+
 // Middleware configures proxy behavior.
 type Middleware struct {
-	name         string
-	requestHook  RequestHook
-	responseHook ResponseHook
-	connectHook  ConnectHook
+	name                string
+	requestHook         RequestHook
+	responseHook        ResponseHook
+	connectHook         ConnectHook
+	forwardCompleteHook forwardCompleteHook
 }
 
 // Name returns the middleware name used in logs and error messages.
@@ -60,6 +69,9 @@ func (m Middleware) apply(p *Proxy) {
 	}
 	if m.connectHook != nil {
 		p.connectHooks = append(p.connectHooks, m.connectHook)
+	}
+	if m.forwardCompleteHook != nil {
+		p.forwardCompleteHooks = append(p.forwardCompleteHooks, m.forwardCompleteHook)
 	}
 }
 

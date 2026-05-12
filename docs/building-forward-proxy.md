@@ -80,7 +80,24 @@ if err := proxy.OnRequest(func(ctx *groxy.RequestContext) error {
 }
 ```
 
-## 3. Block traffic
+## 3. Add access logs
+
+Use `AccessLog` to write one-line traffic logs for HTTP requests and CONNECT
+tunnels:
+
+```go
+logger := log.New(os.Stdout, "groxy: ", log.LstdFlags)
+
+if err := proxy.Use(groxy.AccessLog(logger)); err != nil {
+	log.Fatal(err)
+}
+```
+
+HTTP requests are logged when they are sent upstream and when they finish with a
+response, block, or forwarding error. CONNECT tunnels are logged when the
+CONNECT hook runs.
+
+## 4. Block traffic
 
 Request hooks can return `groxy.Block` to stop a request with a specific status
 code and message:
@@ -107,7 +124,7 @@ if err := proxy.Use(
 }
 ```
 
-## 4. Transform bodies
+## 5. Transform bodies
 
 Body transforms buffer the full body in memory. Groxy protects these helpers with
 `Config.MaxBodySize`.
@@ -135,7 +152,7 @@ if err := proxy.Use(groxy.TransformResponseBody(func(body []byte) ([]byte, error
 Normal HTTPS traffic is encrypted, so response body transforms apply to plain
 HTTP by default. To inspect selected HTTPS hosts, enable HTTPS inspection.
 
-## 5. Inspect selected HTTPS hosts explicitly
+## 6. Inspect selected HTTPS hosts explicitly
 
 HTTPS inspection uses a local certificate authority to generate per-host
 certificates. This is powerful and sensitive, so Groxy keeps it explicit:

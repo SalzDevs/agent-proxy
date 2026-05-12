@@ -18,6 +18,7 @@ It supports:
 - request/response blocking
 - header helpers
 - request/response body transforms
+- access log middleware
 - configurable timeouts
 - configurable logging
 
@@ -237,7 +238,7 @@ proxy, err := groxy.New(groxy.Config{
 
 ## Logging
 
-Groxy is silent by default. Pass a logger if you want logs:
+Groxy is silent by default. Pass a logger if you want internal proxy logs:
 
 ```go
 logger := log.New(os.Stdout, "groxy: ", log.LstdFlags)
@@ -248,10 +249,20 @@ proxy, err := groxy.New(groxy.Config{
 })
 ```
 
+Use `AccessLog` when you want one-line traffic logs for HTTP requests and
+CONNECT tunnels:
+
+```go
+if err := proxy.Use(groxy.AccessLog(logger)); err != nil {
+	log.Fatal(err)
+}
+```
+
 ## Examples and guides
 
 - [Documentation index](docs/README.md)
 - [Runnable examples](examples/README.md)
+- [`examples/access-log`](examples/access-log)
 - [Building a forward proxy in Go with Groxy](docs/building-forward-proxy.md)
 - [HTTPS inspection guide](docs/https-inspection.md)
 - [HTTPS inspection threat model](docs/https-inspection-threat-model.md)

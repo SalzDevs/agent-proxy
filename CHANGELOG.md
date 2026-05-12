@@ -8,6 +8,7 @@ Groxy is currently pre-v1, so minor releases may include API changes.
 
 ### Added
 
+- `AccessLog` middleware for one-line HTTP and CONNECT traffic logs.
 - Documentation index in `docs/README.md`.
 - HTTPS inspection guide and threat model.
 - Examples index in `examples/README.md`.
@@ -18,7 +19,7 @@ Groxy is currently pre-v1, so minor releases may include API changes.
 
 ### Planned
 
-- Observability and access logging helpers
+- Additional observability helpers
 - Proxy authentication helpers
 - Additional HTTPS inspection controls and docs
 

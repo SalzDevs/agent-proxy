@@ -7,8 +7,8 @@ and the generated API reference on
 ## Start here
 
 - [Building a forward proxy in Go with Groxy](building-forward-proxy.md) - a
-  step-by-step introduction with middleware, blocking, body transforms, and HTTPS
-  inspection.
+  step-by-step introduction with middleware, access logs, blocking, body
+  transforms, and HTTPS inspection.
 - [HTTPS inspection guide](https-inspection.md) - setup, CA trust instructions,
   host matching, passthrough behavior, and operational notes.
 - [HTTPS inspection threat model](https-inspection-threat-model.md) - trust

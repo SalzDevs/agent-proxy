@@ -14,17 +14,18 @@ import (
 // A Proxy can be started as a standalone server with Start, gracefully stopped
 // with Shutdown, or used directly as an http.Handler through ServeHTTP.
 type Proxy struct {
-	config        Config
-	server        *http.Server
-	client        *http.Client
-	transport     *http.Transport
-	certCache     *certCache
-	logger        Logger
-	requestHooks  []RequestHook
-	responseHooks []ResponseHook
-	connectHooks  []ConnectHook
-	running       bool
-	mu            sync.RWMutex
+	config               Config
+	server               *http.Server
+	client               *http.Client
+	transport            *http.Transport
+	certCache            *certCache
+	logger               Logger
+	requestHooks         []RequestHook
+	responseHooks        []ResponseHook
+	connectHooks         []ConnectHook
+	forwardCompleteHooks []forwardCompleteHook
+	running              bool
+	mu                   sync.RWMutex
 }
 
 // New creates a Proxy from config.

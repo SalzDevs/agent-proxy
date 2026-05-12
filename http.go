@@ -41,6 +41,13 @@ func (p *Proxy) runResponseHooks(req *http.Request, resp *http.Response) error {
 	return nil
 }
 
+func (p *Proxy) runForwardCompleteHooks(req *http.Request, resp *http.Response, err error) {
+	ctx := &forwardCompleteContext{Request: req, Response: resp, Err: err}
+	for _, hook := range p.forwardCompleteHooks {
+		hook(ctx)
+	}
+}
+
 func (p *Proxy) handleForwardHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL == nil || r.URL.Scheme == "" || r.URL.Host == "" {
 		http.Error(w, "proxy request must contain an absolute URL", http.StatusBadRequest)
@@ -57,11 +64,14 @@ func (p *Proxy) handleForwardHTTP(w http.ResponseWriter, r *http.Request) {
 	writeForwardResponse(w, resp)
 }
 
-func (p *Proxy) forwardRequest(r *http.Request, scheme, host string) (*http.Response, error) {
+func (p *Proxy) forwardRequest(r *http.Request, scheme, host string) (resp *http.Response, err error) {
 	outReq, err := newForwardRequest(r, scheme, host)
 	if err != nil {
 		return nil, forwardError{status: http.StatusInternalServerError, message: "failed to reach upstream request", err: err}
 	}
+	defer func() {
+		p.runForwardCompleteHooks(outReq, resp, err)
+	}()
 
 	if err := p.runRequestHooks(outReq); err != nil {
 		if _, ok := blockError(err); ok {
@@ -70,7 +80,7 @@ func (p *Proxy) forwardRequest(r *http.Request, scheme, host string) (*http.Resp
 		return nil, forwardError{status: http.StatusInternalServerError, message: "request hook failed", err: err}
 	}
 
-	resp, err := p.client.Do(outReq)
+	resp, err = p.client.Do(outReq)
 	if err != nil {
 		return nil, forwardError{status: http.StatusBadGateway, message: "failed to reach upstream server", err: err}
 	}

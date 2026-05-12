@@ -25,6 +25,14 @@ Shows request/response/CONNECT hooks and header helpers.
 go run ./examples/middleware
 ```
 
+## Access log
+
+Shows one-line HTTP and CONNECT traffic logs.
+
+```bash
+go run ./examples/access-log
+```
+
 ## Body transform
 
 Shows request and response body transforms.

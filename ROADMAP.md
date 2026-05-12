@@ -9,9 +9,7 @@ Goal: make Groxy easier to debug and monitor in real applications.
 
 Potential work:
 
-- access log middleware
-- request duration tracking
-- status code tracking
+- additional request duration tracking
 - bytes in/out tracking
 - structured event hooks
 - benchmark coverage for HTTPS inspection
@@ -56,7 +54,6 @@ Before v1:
 
 These are intentionally scoped for new contributors:
 
-- Add an access log middleware example.
 - Add a benchmark for HTTPS inspection.
 - Add more docs for installing the Groxy CA in common browsers/OSes.
 - Add examples for proxy authentication middleware.
