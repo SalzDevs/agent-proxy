@@ -18,13 +18,15 @@ import (
 )
 
 type capturedRequest struct {
-	Method          string
-	Path            string
-	Body            string
-	XTest           string
-	ContentType     string
-	Connection      string
-	ProxyConnection string
+	Method             string
+	Path               string
+	Body               string
+	XTest              string
+	ContentType        string
+	Connection         string
+	ProxyConnection    string
+	ProxyAuthenticate  string
+	ProxyAuthorization string
 }
 
 func newTestProxy(t *testing.T) *Proxy {
@@ -1427,13 +1429,15 @@ func TestServeHTTP_ForwardsGETRequestAndResponseHeaders(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		seen <- capturedRequest{
-			Method:          r.Method,
-			Path:            r.URL.RequestURI(),
-			Body:            string(body),
-			XTest:           r.Header.Get("X-Test"),
-			Connection:      r.Header.Get("Connection"),
-			ProxyConnection: r.Header.Get("Proxy-Connection"),
-			ContentType:     r.Header.Get("Content-Type"),
+			Method:             r.Method,
+			Path:               r.URL.RequestURI(),
+			Body:               string(body),
+			XTest:              r.Header.Get("X-Test"),
+			Connection:         r.Header.Get("Connection"),
+			ProxyConnection:    r.Header.Get("Proxy-Connection"),
+			ProxyAuthenticate:  r.Header.Get("Proxy-Authenticate"),
+			ProxyAuthorization: r.Header.Get("Proxy-Authorization"),
+			ContentType:        r.Header.Get("Content-Type"),
 		}
 
 		w.Header().Set("X-Upstream", "yes")
@@ -1451,6 +1455,8 @@ func TestServeHTTP_ForwardsGETRequestAndResponseHeaders(t *testing.T) {
 	req.Header.Set("X-Test", "abc")
 	req.Header.Set("Connection", "keep-alive")
 	req.Header.Set("Proxy-Connection", "close")
+	req.Header.Set("Proxy-Authenticate", "Basic realm=\"Groxy\"")
+	req.Header.Set("Proxy-Authorization", "Basic dXNlcjpwYXNz")
 
 	rec := httptest.NewRecorder()
 	p.ServeHTTP(rec, req)
@@ -1470,6 +1476,12 @@ func TestServeHTTP_ForwardsGETRequestAndResponseHeaders(t *testing.T) {
 	}
 	if got.ProxyConnection != "" {
 		t.Fatalf("upstream Proxy-Connection header = %q, want empty", got.ProxyConnection)
+	}
+	if got.ProxyAuthenticate != "" {
+		t.Fatalf("upstream Proxy-Authenticate header = %q, want empty", got.ProxyAuthenticate)
+	}
+	if got.ProxyAuthorization != "" {
+		t.Fatalf("upstream Proxy-Authorization header = %q, want empty", got.ProxyAuthorization)
 	}
 	if got.Body != "" {
 		t.Fatalf("upstream body = %q, want empty", got.Body)
@@ -1551,6 +1563,8 @@ func TestRemoveHopByHopHeaders_RemovesHeaders(t *testing.T) {
 	h.Set("Connection", "keep-alive")
 	h.Set("Proxy-Connection", "close")
 	h.Set("Keep-Alive", "timeout=5")
+	h.Set("Proxy-Authenticate", "Basic realm=\"Groxy\"")
+	h.Set("Proxy-Authorization", "Basic dXNlcjpwYXNz")
 	h.Set("Upgrade", "websocket")
 	h.Set("X-Keep", "yes")
 
@@ -1560,6 +1574,8 @@ func TestRemoveHopByHopHeaders_RemovesHeaders(t *testing.T) {
 		"Connection",
 		"Proxy-Connection",
 		"Keep-Alive",
+		"Proxy-Authenticate",
+		"Proxy-Authorization",
 		"Upgrade",
 	} {
 		if got := h.Get(header); got != "" {
