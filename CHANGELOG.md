@@ -9,6 +9,7 @@ Groxy is currently pre-v1, so minor releases may include API changes.
 ### Added
 
 - `ProxyBasicAuth` middleware for static HTTP Basic proxy authentication on HTTP requests.
+- `ProxyBasicAuthFunc` middleware for custom HTTP Basic proxy authentication validators.
 - Timeout semantics guide documenting client-to-proxy and proxy-to-upstream behavior.
 
 ### Planned

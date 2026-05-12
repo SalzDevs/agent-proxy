@@ -27,6 +27,17 @@ func ProxyBasicAuth(username, password string) Middleware {
 	})
 }
 
+// ProxyBasicAuthFunc returns middleware that requires HTTP Basic proxy
+// authentication using validate to check username and password pairs.
+//
+// The credentials are read from the Proxy-Authorization header. If validate is
+// nil or returns false, Groxy rejects the request with 407 Proxy Authentication
+// Required. Basic authentication is not encrypted by itself, so only use it when
+// the client-to-proxy connection is otherwise protected or trusted.
+func ProxyBasicAuthFunc(validate func(username, password string) bool) Middleware {
+	return proxyBasicAuthMiddleware("ProxyBasicAuthFunc", defaultProxyAuthRealm, validate)
+}
+
 func proxyBasicAuthMiddleware(name, realm string, validate func(username, password string) bool) Middleware {
 	auth := &proxyBasicAuthenticator{realm: realm, validate: validate}
 	return Middleware{name: name, requestHook: auth.onRequest}

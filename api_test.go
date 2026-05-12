@@ -58,6 +58,34 @@ func TestPublicAPI_UseMiddleware(t *testing.T) {
 	}
 }
 
+func TestPublicAPI_ProxyBasicAuthFunc(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstream.Close()
+
+	proxy, err := groxy.New(groxy.Config{Addr: "127.0.0.1:8080"})
+	if err != nil {
+		t.Fatalf("groxy.New() error = %v", err)
+	}
+
+	if err := proxy.Use(groxy.ProxyBasicAuthFunc(func(username, password string) bool {
+		return username == "user" && password == "pass"
+	})); err != nil {
+		t.Fatalf("proxy.Use() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, upstream.URL, nil)
+	req.Header.Set("Proxy-Authorization", "Basic dXNlcjpwYXNz")
+	rec := httptest.NewRecorder()
+
+	proxy.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
 func TestPublicAPI_Block(t *testing.T) {
 	proxy, err := groxy.New(groxy.Config{Addr: "127.0.0.1:8080"})
 	if err != nil {

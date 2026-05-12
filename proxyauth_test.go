@@ -87,3 +87,63 @@ func TestProxyBasicAuth_RejectsMalformedHTTP(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusProxyAuthRequired)
 	}
 }
+
+func TestProxyBasicAuthFunc_AllowsValidHTTP(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstream.Close()
+
+	var gotUsername, gotPassword string
+	proxy := newTestProxy(t)
+	mustUse(t, proxy, ProxyBasicAuthFunc(func(username, password string) bool {
+		gotUsername = username
+		gotPassword = password
+		return username == "user" && password == "pass"
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, upstream.URL, nil)
+	req.Header.Set("Proxy-Authorization", "Basic dXNlcjpwYXNz")
+	rec := httptest.NewRecorder()
+	proxy.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+	if gotUsername != "user" {
+		t.Fatalf("validator username = %q, want %q", gotUsername, "user")
+	}
+	if gotPassword != "pass" {
+		t.Fatalf("validator password = %q, want %q", gotPassword, "pass")
+	}
+}
+
+func TestProxyBasicAuthFunc_RejectsInvalidHTTP(t *testing.T) {
+	proxy := newTestProxy(t)
+	mustUse(t, proxy, ProxyBasicAuthFunc(func(username, password string) bool {
+		return false
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req.Header.Set("Proxy-Authorization", "Basic dXNlcjpwYXNz")
+	rec := httptest.NewRecorder()
+	proxy.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusProxyAuthRequired {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusProxyAuthRequired)
+	}
+}
+
+func TestProxyBasicAuthFunc_NilValidatorRejectsHTTP(t *testing.T) {
+	proxy := newTestProxy(t)
+	mustUse(t, proxy, ProxyBasicAuthFunc(nil))
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req.Header.Set("Proxy-Authorization", "Basic dXNlcjpwYXNz")
+	rec := httptest.NewRecorder()
+	proxy.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusProxyAuthRequired {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusProxyAuthRequired)
+	}
+}

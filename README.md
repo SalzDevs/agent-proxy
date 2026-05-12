@@ -158,6 +158,17 @@ if err := proxy.Use(groxy.ProxyBasicAuth("admin", os.Getenv("PROXY_PASSWORD")));
 }
 ```
 
+Use `ProxyBasicAuthFunc` when credentials come from your own config, database,
+or identity system:
+
+```go
+if err := proxy.Use(groxy.ProxyBasicAuthFunc(func(username, password string) bool {
+	return users.Verify(username, password)
+})); err != nil {
+	log.Fatal(err)
+}
+```
+
 Basic authentication is not encrypted by itself. Use it only when the
 client-to-proxy connection is protected or trusted, such as localhost, a private
 network, VPN, SSH tunnel, or TLS-terminating wrapper.
