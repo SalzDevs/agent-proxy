@@ -33,6 +33,22 @@ Shows one-line HTTP and CONNECT traffic logs.
 go run ./examples/access-log
 ```
 
+## Proxy auth
+
+Shows HTTP Basic proxy authentication using `ProxyBasicAuth`.
+
+```bash
+GROXY_PROXY_PASSWORD=password go run ./examples/proxy-auth
+```
+
+Try it from another terminal:
+
+```bash
+curl -x http://admin:password@127.0.0.1:8080 http://example.com
+```
+
+See the [proxy authentication guide](../docs/proxy-auth.md) for security notes.
+
 ## Body transform
 
 Shows request and response body transforms.

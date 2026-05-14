@@ -11,6 +11,8 @@ and the generated API reference on
   transforms, and HTTPS inspection.
 - [Timeout semantics](timeouts.md) - exact client-to-proxy and proxy-to-upstream
   timeout behavior.
+- [Proxy authentication](proxy-auth.md) - Basic proxy auth setup, custom
+  validators, and security notes.
 - [HTTPS inspection guide](https-inspection.md) - setup, CA trust instructions,
   host matching, passthrough behavior, and operational notes.
 - [HTTPS inspection threat model](https-inspection-threat-model.md) - trust

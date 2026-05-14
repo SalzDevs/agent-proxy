@@ -171,7 +171,8 @@ if err := proxy.Use(groxy.ProxyBasicAuthFunc(func(username, password string) boo
 
 Basic authentication is not encrypted by itself. Use it only when the
 client-to-proxy connection is protected or trusted, such as localhost, a private
-network, VPN, SSH tunnel, or TLS-terminating wrapper.
+network, VPN, SSH tunnel, or TLS-terminating wrapper. See the
+[proxy authentication guide](docs/proxy-auth.md) for details.
 
 ## Body transforms
 
@@ -301,7 +302,9 @@ if err := proxy.Use(groxy.AccessLog(logger)); err != nil {
 - [Documentation index](docs/README.md)
 - [Runnable examples](examples/README.md)
 - [`examples/access-log`](examples/access-log)
+- [`examples/proxy-auth`](examples/proxy-auth)
 - [Building a forward proxy in Go with Groxy](docs/building-forward-proxy.md)
+- [Proxy authentication](docs/proxy-auth.md)
 - [Timeout semantics](docs/timeouts.md)
 - [HTTPS inspection guide](docs/https-inspection.md)
 - [HTTPS inspection threat model](docs/https-inspection-threat-model.md)
