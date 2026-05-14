@@ -693,6 +693,12 @@ func stopProxyForTest(t *testing.T, p *Proxy, startErrCh chan error) {
 func inspectedHTTPSRequest(t *testing.T, proxyAddr, upstreamHost, serverName, path string, ca *CA) *http.Response {
 	t.Helper()
 
+	return inspectedHTTPSRequestWithConnectHeaders(t, proxyAddr, upstreamHost, serverName, path, ca, nil)
+}
+
+func inspectedHTTPSRequestWithConnectHeaders(t *testing.T, proxyAddr, upstreamHost, serverName, path string, ca *CA, connectHeaders http.Header) *http.Response {
+	t.Helper()
+
 	clientConn, err := net.Dial("tcp", proxyAddr)
 	if err != nil {
 		t.Fatalf("net.Dial() proxy error = %v", err)
@@ -701,8 +707,17 @@ func inspectedHTTPSRequest(t *testing.T, proxyAddr, upstreamHost, serverName, pa
 		t.Fatalf("SetDeadline() error = %v", err)
 	}
 
-	connectReq := "CONNECT " + upstreamHost + " HTTP/1.1\r\nHost: " + upstreamHost + "\r\n\r\n"
-	if _, err := clientConn.Write([]byte(connectReq)); err != nil {
+	var connectReq strings.Builder
+	connectReq.WriteString("CONNECT " + upstreamHost + " HTTP/1.1\r\n")
+	connectReq.WriteString("Host: " + upstreamHost + "\r\n")
+	for key, values := range connectHeaders {
+		for _, value := range values {
+			connectReq.WriteString(key + ": " + value + "\r\n")
+		}
+	}
+	connectReq.WriteString("\r\n")
+
+	if _, err := clientConn.Write([]byte(connectReq.String())); err != nil {
 		t.Fatalf("write CONNECT request error = %v", err)
 	}
 
@@ -831,6 +846,40 @@ func TestInspectCONNECT_RunsHTTPSResponseHook(t *testing.T) {
 	if got := resp.Header.Get("X-Groxy-Response"); got != "true" {
 		t.Fatalf("response X-Groxy-Response = %q, want %q", got, "true")
 	}
+	stopProxyForTest(t, p, startErrCh)
+}
+
+func TestInspectCONNECT_ProxyBasicAuthAuthenticatesCONNECTOnly(t *testing.T) {
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer upstream.Close()
+
+	upstreamURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatalf("url.Parse() error = %v", err)
+	}
+
+	p, ca, proxyAddr := newHTTPSInspectionTestProxy(t, upstreamURL.Hostname())
+	mustUse(t, p, ProxyBasicAuth("user", "pass"))
+
+	startErrCh := startProxyForTest(t, p, proxyAddr)
+	resp := inspectedHTTPSRequestWithConnectHeaders(
+		t,
+		proxyAddr,
+		upstreamURL.Host,
+		upstreamURL.Hostname(),
+		"/",
+		ca,
+		http.Header{"Proxy-Authorization": {"Basic dXNlcjpwYXNz"}},
+	)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, body = %q, want %d", resp.StatusCode, string(body), http.StatusOK)
+	}
+
 	stopProxyForTest(t, p, startErrCh)
 }
 

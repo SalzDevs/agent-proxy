@@ -139,6 +139,7 @@ func (p *Proxy) serveInspectedHTTPS(conn net.Conn, target string) {
 			return
 		}
 
+		req = withProxyAuthAlreadyChecked(req)
 		resp, err := p.forwardRequest(req, "https", target)
 		_ = req.Body.Close()
 		if err != nil {

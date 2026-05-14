@@ -51,6 +51,10 @@ type proxyBasicAuthenticator struct {
 }
 
 func (auth *proxyBasicAuthenticator) onRequest(ctx *RequestContext) error {
+	if proxyAuthAlreadyChecked(ctx.Request) {
+		return nil
+	}
+
 	return auth.authenticate(ctx.Request.Header.Get("Proxy-Authorization"))
 }
 

@@ -6,6 +6,21 @@ import (
 	"testing"
 )
 
+func TestProxyAuthAlreadyChecked(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
+	if proxyAuthAlreadyChecked(req) {
+		t.Fatal("new request is marked as already checked")
+	}
+
+	checkedReq := withProxyAuthAlreadyChecked(req)
+	if !proxyAuthAlreadyChecked(checkedReq) {
+		t.Fatal("request is not marked as already checked")
+	}
+	if proxyAuthAlreadyChecked(req) {
+		t.Fatal("original request was mutated")
+	}
+}
+
 func TestParseProxyBasicAuth(t *testing.T) {
 	cases := []struct {
 		name         string
