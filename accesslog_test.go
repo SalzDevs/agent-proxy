@@ -76,6 +76,35 @@ func TestAccessLog_BlockedRequestLogsAndCleansUp(t *testing.T) {
 	}
 }
 
+func TestAccessLog_DoesNotLogProxyAuthorization(t *testing.T) {
+	var buf bytes.Buffer
+	logger := log.New(&buf, "", 0)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	proxy := newTestProxy(t)
+	mustUse(t, proxy, AccessLog(logger), ProxyBasicAuth("user", "pass"))
+
+	req := httptest.NewRequest(http.MethodGet, upstream.URL, nil)
+	req.Header.Set("Proxy-Authorization", "Basic dXNlcjpwYXNz")
+	rec := httptest.NewRecorder()
+	proxy.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	got := buf.String()
+	for _, forbidden := range []string{"Proxy-Authorization", "dXNlcjpwYXNz", "user", "pass"} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("access log = %q, should not contain %q", got, forbidden)
+		}
+	}
+}
+
 func TestAccessLog_CONNECT(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)

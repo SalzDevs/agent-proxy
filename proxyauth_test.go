@@ -1,9 +1,14 @@
 package groxy
 
 import (
+	"bufio"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestProxyBasicAuth_AllowsValidHTTP(t *testing.T) {
@@ -26,6 +31,92 @@ func TestProxyBasicAuth_AllowsValidHTTP(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
+}
+
+func TestProxyBasicAuth_AllowsValidCONNECTTunnel(t *testing.T) {
+	upstreamListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen() upstream error = %v", err)
+	}
+	defer upstreamListener.Close()
+
+	upstreamErrCh := make(chan error, 1)
+	go func() {
+		conn, err := upstreamListener.Accept()
+		if err != nil {
+			upstreamErrCh <- err
+			return
+		}
+		defer conn.Close()
+
+		buf := make([]byte, len("ping"))
+		if _, err := io.ReadFull(conn, buf); err != nil {
+			upstreamErrCh <- err
+			return
+		}
+		if string(buf) != "ping" {
+			upstreamErrCh <- nil
+			return
+		}
+		_, err = conn.Write([]byte("pong"))
+		upstreamErrCh <- err
+	}()
+
+	proxyAddr := freeAddr(t)
+	proxy := newTestProxyAtAddr(t, proxyAddr)
+	mustUse(t, proxy, ProxyBasicAuth("user", "pass"))
+	startErrCh := startProxyForTest(t, proxy, proxyAddr)
+
+	clientConn, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("net.Dial() proxy error = %v", err)
+	}
+	defer clientConn.Close()
+	if err := clientConn.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("SetDeadline() error = %v", err)
+	}
+
+	connectReq := "CONNECT " + upstreamListener.Addr().String() + " HTTP/1.1\r\n" +
+		"Host: " + upstreamListener.Addr().String() + "\r\n" +
+		"Proxy-Authorization: Basic dXNlcjpwYXNz\r\n" +
+		"\r\n"
+	if _, err := clientConn.Write([]byte(connectReq)); err != nil {
+		t.Fatalf("write CONNECT request error = %v", err)
+	}
+
+	reader := bufio.NewReader(clientConn)
+	statusLine, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("read CONNECT status error = %v", err)
+	}
+	if !strings.Contains(statusLine, "200 Connection Established") {
+		t.Fatalf("CONNECT status line = %q, want 200 Connection Established", statusLine)
+	}
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatalf("read CONNECT header error = %v", err)
+		}
+		if line == "\r\n" {
+			break
+		}
+	}
+
+	if _, err := clientConn.Write([]byte("ping")); err != nil {
+		t.Fatalf("write tunnel payload error = %v", err)
+	}
+	buf := make([]byte, len("pong"))
+	if _, err := io.ReadFull(reader, buf); err != nil {
+		t.Fatalf("read tunnel payload error = %v", err)
+	}
+	if string(buf) != "pong" {
+		t.Fatalf("tunnel response = %q, want %q", string(buf), "pong")
+	}
+	if err := <-upstreamErrCh; err != nil {
+		t.Fatalf("upstream error = %v", err)
+	}
+
+	stopProxyForTest(t, proxy, startErrCh)
 }
 
 func TestProxyBasicAuth_Name(t *testing.T) {
