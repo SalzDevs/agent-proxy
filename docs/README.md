@@ -13,6 +13,8 @@ and the generated API reference on
   timeout behavior.
 - [Proxy authentication](proxy-auth.md) - Basic proxy auth setup, custom
   validators, and security notes.
+- [Custom block and error responses](custom-block-responses.md) - examples for
+  policy blocks and API-style error responses.
 - [HTTPS inspection guide](https-inspection.md) - setup, CA trust instructions,
   host matching, passthrough behavior, and operational notes.
 - [HTTPS inspection threat model](https-inspection-threat-model.md) - trust

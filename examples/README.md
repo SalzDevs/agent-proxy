@@ -49,6 +49,16 @@ curl -x http://admin:password@127.0.0.1:8080 http://example.com
 
 See the [proxy authentication guide](../docs/proxy-auth.md) for security notes.
 
+## Custom block responses
+
+Shows policy blocks and API-style upstream error responses.
+
+```bash
+go run ./examples/custom-block-response
+```
+
+See the [custom block and error response guide](../docs/custom-block-responses.md).
+
 ## Body transform
 
 Shows request and response body transforms.

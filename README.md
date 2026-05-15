@@ -147,6 +147,9 @@ if err := proxy.Use(
 }
 ```
 
+For API-style error examples, see the
+[custom block and error response guide](docs/custom-block-responses.md).
+
 ## Proxy authentication
 
 Use `ProxyBasicAuth` to require HTTP Basic proxy authentication for normal HTTP
@@ -303,8 +306,10 @@ if err := proxy.Use(groxy.AccessLog(logger)); err != nil {
 - [Runnable examples](examples/README.md)
 - [`examples/access-log`](examples/access-log)
 - [`examples/proxy-auth`](examples/proxy-auth)
+- [`examples/custom-block-response`](examples/custom-block-response)
 - [Building a forward proxy in Go with Groxy](docs/building-forward-proxy.md)
 - [Proxy authentication](docs/proxy-auth.md)
+- [Custom block and error responses](docs/custom-block-responses.md)
 - [Timeout semantics](docs/timeouts.md)
 - [HTTPS inspection guide](docs/https-inspection.md)
 - [HTTPS inspection threat model](docs/https-inspection-threat-model.md)

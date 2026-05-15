@@ -207,6 +207,7 @@ See [the examples index](../examples/README.md) for runnable programs:
 
 - [`examples/basic`](../examples/basic)
 - [`examples/middleware`](../examples/middleware)
+- [`examples/custom-block-response`](../examples/custom-block-response)
 - [`examples/body-transform`](../examples/body-transform)
 - [`examples/https-inspection`](../examples/https-inspection)
 
